@@ -40,7 +40,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <style>
     html {{ height: 100%; }}
-    body {{ height: 100%; }}
+    body {{ height: 100%; margin: 0; }}
     .widget-subarea {{ height: 100%; }}
     .jupyter-widgets-disconnected {{ height: 100%; }}
 </style>

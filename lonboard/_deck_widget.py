@@ -9,9 +9,19 @@ class BaseDeckWidget(BaseWidget):
         default_value=None, 
         allow_none=True
     ).tag(sync=True)
+    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     class_name = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
 
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+class CustomDeckWidget(BaseDeckWidget):
+    placement_x = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
+    placement_y = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
+
+    def __init__(self, **kwargs):
+        if self.placement_x and self.placement_y:
+            self.placement = "fill"
         super().__init__(**kwargs)
 
 class FullscreenWidget(BaseDeckWidget):
@@ -19,7 +29,6 @@ class FullscreenWidget(BaseDeckWidget):
 
     enter_label = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     exit_label = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     class_name = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     
     def __init__(self, **kwargs):
@@ -31,7 +40,6 @@ class ZoomWidget(BaseDeckWidget):
     zoom_in_label = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     zoom_out_label = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     transition_duration = traitlets.Int(default_value=None, allow_none=True).tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     class_name = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     
     def __init__(self, **kwargs):
@@ -42,55 +50,49 @@ class CompassWidget(BaseDeckWidget):
 
     label = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     transition_duration = traitlets.Int(default_value=None, allow_none=True).tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     class_name = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-class NorthArrowWidget(BaseDeckWidget):
+class NorthArrowWidget(CustomDeckWidget):
     _widget_type = traitlets.Unicode("north-arrow").tag(sync=True)
 
     label = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     transition_duration = traitlets.Int(default_value=None, allow_none=True).tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     class_name = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-class TitleWidget(BaseDeckWidget):
+class TitleWidget(CustomDeckWidget):
 
     _widget_type = traitlets.Unicode("title").tag(sync=True)
     title = traitlets.Unicode(allow_none=False).tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-class LegendWidget(BaseDeckWidget):
+class LegendWidget(CustomDeckWidget):
 
     _widget_type = traitlets.Unicode("legend").tag(sync=True)
     title = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
     labels = traitlets.List(traitlets.Unicode()).tag(sync=True)
     colors = traitlets.List(traitlets.Unicode()).tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-class ScaleWidget(BaseDeckWidget):
+class ScaleWidget(CustomDeckWidget):
 
     _widget_type = traitlets.Unicode("scale").tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     max_width = traitlets.Int(default_value=None, allow_none=True).tag(sync=True)
     use_imperial = traitlets.Bool(default_value=None, allow_none=True).tag(sync=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-class SaveImageWidget(BaseDeckWidget):
+class SaveImageWidget(CustomDeckWidget):
 
     _widget_type = traitlets.Unicode("save-image").tag(sync=True)
-    style = traitlets.Dict(default_value=None, allow_none=True).tag(sync=True)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

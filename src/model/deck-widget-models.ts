@@ -6,18 +6,49 @@ import { LegendWidget, NorthArrowWidget, TitleWidget, ScaleWidget, SaveImageWidg
 
 export abstract class BaseDeckWidgetModel extends BaseModel {
 
-  // protected props: Object = {};
-  // protected viewId: string | null = null;
   protected placement: WidgetPlacement = "top-left";
   protected className: string | undefined = undefined;
+  protected style: Partial<CSSStyleDeclaration> = {};
 
   constructor(model: WidgetModel, updateStateCallback: () => void) {
     super(model, updateStateCallback);
 
-    // this.initRegularAttribute("props", "props");
-    // this.initRegularAttribute("view_id", "viewId");
     this.initRegularAttribute("placement", "placement");
     this.initRegularAttribute("class_name", "className");
+    this.initRegularAttribute("style", "style");
+  }
+
+  abstract render(): Widget;
+}
+
+export abstract class CustomDeckWidgetModel extends BaseDeckWidgetModel {
+
+  protected placementX: string | undefined = undefined;
+  protected placementY: string | undefined = undefined;
+
+  constructor(model: WidgetModel, updateStateCallback: () => void) {
+    super(model, updateStateCallback);
+
+    this.initRegularAttribute("placement", "placement");
+    this.initRegularAttribute("class_name", "className");
+    this.initRegularAttribute("placement_x", "placementX");
+    this.initRegularAttribute("placement_y", "placementY");
+  }
+
+  update_position(): void {
+    console.log("position updated");
+    console.log(this.placementX);
+    console.log(this.placementY);
+    if (this.placementX && this.placementY) {
+      this.style = {
+        ...this.style,
+        position: "absolute",
+        transform: "translate(-50%, -50%)",
+        left: this.placementX,
+        top: this.placementY,
+      };
+      this.placement = "fill";
+    }
   }
 
   abstract render(): Widget;
@@ -35,8 +66,6 @@ export class FullscreenWidgetModel extends BaseDeckWidgetModel {
 
     this.initRegularAttribute("enter_label", "enterLabel");
     this.initRegularAttribute("exit_label", "exitLabel");
-    this.initRegularAttribute("style", "style");
-    this.initRegularAttribute("class_name", "className");
   }
 
   render(): FullscreenWidget {
@@ -60,7 +89,6 @@ export class ZoomWidgetModel extends BaseDeckWidgetModel {
   protected zoomInLabel: string = "Zoom In";
   protected zoomOutLabel: string = "Zoom Out";
   protected transitionDuration: number = 200;
-  protected style: Partial<CSSStyleDeclaration> = {};
 
   constructor(model: WidgetModel, updateStateCallback: () => void) {
     super(model, updateStateCallback);
@@ -68,8 +96,6 @@ export class ZoomWidgetModel extends BaseDeckWidgetModel {
     this.initRegularAttribute("zoom_in_label", "zoomInLabel");
     this.initRegularAttribute("zoom_out_label", "zoomOutLabel");
     this.initRegularAttribute("transition_duration", "transitionDuration");
-    this.initRegularAttribute("style", "style");
-    this.initRegularAttribute("class_name", "className");
   }
 
   render(): ZoomWidget {
@@ -93,15 +119,12 @@ export class CompassWidgetModel extends BaseDeckWidgetModel {
 
   protected label: string = "Compass";
   protected transitionDuration: number = 200;
-  protected style: Partial<CSSStyleDeclaration> = {};
 
   constructor(model: WidgetModel, updateStateCallback: () => void) {
     super(model, updateStateCallback);
 
     this.initRegularAttribute("label", "label");
     this.initRegularAttribute("transition_duration", "transitionDuration");
-    this.initRegularAttribute("style", "style");
-    this.initRegularAttribute("class_name", "className");
   }
 
   render(): CompassWidget {
@@ -119,20 +142,17 @@ export class CompassWidgetModel extends BaseDeckWidgetModel {
   }
 }
 
-export class NorthArrowWidgetModel extends BaseDeckWidgetModel {
+export class NorthArrowWidgetModel extends CustomDeckWidgetModel {
   static widgetType = "north-arrow";
 
   protected label: string = "North Arrow";
   protected transitionDuration: number = 200;
-  protected style: Partial<CSSStyleDeclaration> = {};
 
   constructor(model: WidgetModel, updateStateCallback: () => void) {
     super(model, updateStateCallback);
 
     this.initRegularAttribute("label", "label");
     this.initRegularAttribute("transition_duration", "transitionDuration");
-    this.initRegularAttribute("style", "style");
-    this.initRegularAttribute("class_name", "className");
   }
 
   render(): NorthArrowWidget {
@@ -150,7 +170,7 @@ export class NorthArrowWidgetModel extends BaseDeckWidgetModel {
   }
 }
 
-export class TitleWidgetModel extends BaseDeckWidgetModel{
+export class TitleWidgetModel extends CustomDeckWidgetModel{
   static widgetType = "title";
 
   protected title: string = "";
@@ -161,11 +181,10 @@ export class TitleWidgetModel extends BaseDeckWidgetModel{
     super(model, updateStateCallback);
 
     this.initRegularAttribute("title", "title");
-    this.initRegularAttribute("placement", "placement");
-    this.initRegularAttribute("style", "style");
   }
 
   render() {
+    this.update_position();
     return new TitleWidget({
       id:  "title", 
       title: this.title, 
@@ -179,22 +198,17 @@ export class TitleWidgetModel extends BaseDeckWidgetModel{
   }
 }
 
-export class LegendWidgetModel extends BaseDeckWidgetModel{
+export class LegendWidgetModel extends CustomDeckWidgetModel{
   static widgetType = "legend";
 
   protected title: string = "Legend";
   protected labels: string[] = [];
   protected colors: string[] = [];
-  protected placement: WidgetPlacement = "bottom-right";
-  protected style: Partial<CSSStyleDeclaration> = {};
 
   constructor(model: WidgetModel, updateStateCallback: () => void) {
     super(model, updateStateCallback);
 
     this.initRegularAttribute("title", "title");
-    this.initRegularAttribute("placement", "placement");
-    this.initRegularAttribute("style", "style");
-
     this.initRegularAttribute("labels", "labels");
     this.initRegularAttribute("colors", "colors");
   }
@@ -205,6 +219,7 @@ export class LegendWidgetModel extends BaseDeckWidgetModel{
       legend.set(this.labels[i], this.colors[i]);
     }
 
+    this.update_position();
     return new LegendWidget({
       id:  "legend", 
       title: this.title, 
@@ -219,19 +234,15 @@ export class LegendWidgetModel extends BaseDeckWidgetModel{
   }
 }
 
-export class ScaleWidgetModel extends BaseDeckWidgetModel{
+export class ScaleWidgetModel extends CustomDeckWidgetModel{
   static widgetType = "scale";
 
-  protected placement: WidgetPlacement = "bottom-left";
-  protected style: Partial<CSSStyleDeclaration> = {};
   protected maxWidth: number = 300;
   protected useImperial: boolean = false;
 
   constructor(model: WidgetModel, updateStateCallback: () => void) {
     super(model, updateStateCallback);
 
-    this.initRegularAttribute("placement", "placement");
-    this.initRegularAttribute("style", "style");
     this.initRegularAttribute("max_width", "maxWidth");
     this.initRegularAttribute("use_imperial", "useImperial");
   }
@@ -251,19 +262,15 @@ export class ScaleWidgetModel extends BaseDeckWidgetModel{
   }
 }
 
-export class SaveImageWidgetModel extends BaseDeckWidgetModel{
+export class SaveImageWidgetModel extends CustomDeckWidgetModel{
   static widgetType = "save-image";
 
   protected label: string = "";
-  protected placement: WidgetPlacement = "top-right";
-  protected style: Partial<CSSStyleDeclaration> = {};
 
   constructor(model: WidgetModel, updateStateCallback: () => void) {
     super(model, updateStateCallback);
 
     this.initRegularAttribute("label", "label");
-    this.initRegularAttribute("placement", "placement");
-    this.initRegularAttribute("style", "style");
   }
 
   render() {

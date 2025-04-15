@@ -50,6 +50,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+PINNED_EMBED_URL = 'https://cdn.jsdelivr.net/npm/@jupyter-widgets/html-manager@1.0.13/dist/embed-amd.js'
 
 class Map(BaseAnyWidget):
     """
@@ -425,6 +426,7 @@ class Map(BaseAnyWidget):
                 title=title or "Lonboard export",
                 template=_HTML_TEMPLATE,
                 drop_defaults=False,
+                embed_url=PINNED_EMBED_URL,
             )
 
         if filename is None:

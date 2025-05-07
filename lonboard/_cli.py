@@ -1,33 +1,38 @@
+from __future__ import annotations
+
 import json
 import webbrowser
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Dict, List, Optional
 
 import click
-import pyarrow as pa
-import pyarrow.parquet as pq
+from arro3.core import Table
 from pyproj import CRS
 
 from lonboard import viz
 from lonboard._constants import EXTENSION_NAME
 
 
-def read_pyogrio(path: Path) -> pa.Table:
-    """Read path using pyogrio and convert field metadata to geoarrow
+def read_pyogrio(path: Path) -> Table:
+    """Read path using pyogrio and convert field metadata to geoarrow.
 
     Args:
         path: Path to file readable by pyogrio
+
     """
     try:
-        from pyogrio.raw import read_arrow
+        from pyogrio.raw import open_arrow
     except ImportError as e:
         raise ImportError(
-            "pyogrio is a required dependency for the CLI. "
-            "Install with `pip install pyogrio`."
+            "pyogrio is a required dependency for the CLI for reading data sources \n"
+            "other than GeoParquet.\n"
+            "Install with `pip install pyogrio`.",
         ) from e
 
-    meta, table = read_arrow(path)
+    with open_arrow(path, use_pyarrow=False) as source:
+        meta, stream = source
+        table = Table.from_arrow(stream)
+
     # The `geometry_name` key always exists but can be an empty string. In the case of
     # an empty string, we want to default to `wkb_geometry`
     geometry_column_name = meta.get("geometry_name") or "wkb_geometry"
@@ -42,7 +47,7 @@ def read_pyogrio(path: Path) -> pa.Table:
     schema = table.schema
     field = schema.field(geometry_column_index)
 
-    metadata: Dict[bytes, bytes] = field.metadata
+    metadata: dict[bytes, bytes] = field.metadata
     if metadata.get(b"ARROW:extension:name") == EXTENSION_NAME.OGC_WKB:
         # Parse CRS and create PROJJSON
         ext_meta = {"crs": CRS.from_user_input(meta["crs"]).to_json_dict()}
@@ -53,23 +58,60 @@ def read_pyogrio(path: Path) -> pa.Table:
 
     new_field = field.with_name("geometry").with_metadata(metadata)
     new_schema = schema.set(geometry_column_index, new_field)
-    return pa.Table.from_arrays(table.columns, schema=new_schema)
+    return table.with_schema(new_schema)
 
 
-def read_geoparquet(path: Path):
-    """Read GeoParquet file at path using pyarrow
+def read_parquet(path: Path) -> tuple[Table, dict]:
+    """Read Parquet file using either pyarrow or arro3.
+
+    arro3.io.read_parquet is not multi-threaded (as of arro3 0.2.1), so pyarrow can be
+    up to 4x faster on an 8-core machine. Because of this, we prefer pyarrow if it's
+    installed, and fall back to arro3 otherwise.
+
+    Args:
+        path: path to Parquet file.
+
+    Raises:
+        ValueError: if there's no GeoParquet metadata in the file
+
+    Returns:
+        arro3 Table
+
+    """
+    try:
+        import pyarrow.parquet as pq
+
+    except ImportError:
+        from arro3.io import read_parquet
+
+        reader = read_parquet(path)
+
+        if "geo" not in reader.schema.metadata_str:
+            raise ValueError("Expected geo metadata in Parquet file")  # noqa: B904
+
+        table = reader.read_all()
+        geo_meta = json.loads(table.schema.metadata_str["geo"])
+
+        return table, geo_meta
+    else:
+        file = pq.ParquetFile(path)
+        if b"geo" not in file.metadata.metadata:
+            raise ValueError("Expected geo metadata in Parquet file")
+        geo_meta = json.loads(file.metadata.metadata.get(b"geo"))
+
+        table = Table.from_arrow(file.read())
+
+        return table, geo_meta
+
+
+def read_geoparquet(path: Path) -> Table:
+    """Read GeoParquet file at path using pyarrow or arro3.io.
 
     Args:
         path: Path to GeoParquet file
+
     """
-    file = pq.ParquetFile(path)
-    geo_meta = file.metadata.metadata.get(b"geo")
-    if not geo_meta:
-        raise ValueError("Expected geo metadata in Parquet file")
-
-    table = file.read()
-
-    geo_meta = json.loads(geo_meta)
+    table, geo_meta = read_parquet(path)
     geometry_column_name = geo_meta["primary_column"]
     geometry_column_index = [
         i for (i, name) in enumerate(table.schema.names) if name == geometry_column_name
@@ -86,7 +128,7 @@ def read_geoparquet(path: Path):
 
     new_field = table.schema.field(geometry_column_index).with_metadata(metadata)
     new_schema = table.schema.set(geometry_column_index, new_field)
-    return pa.Table.from_arrays(table.columns, schema=new_schema)
+    return table.with_schema(new_schema)
 
 
 @click.command()
@@ -111,13 +153,12 @@ def read_geoparquet(path: Path):
     ),
 )
 @click.argument("files", nargs=-1, type=click.Path(path_type=Path))
-def main(output: Optional[Path], open_browser: Optional[bool], files: List[Path]):
+def main(output: Path | None, open_browser: bool | None, files: list[Path]) -> None:
     """Interactively visualize geospatial data using Lonboard.
 
     This CLI can be used either to quickly view local files or to create static HTML
     files.
     """
-
     tables = []
     for path in files:
         if path.suffix == ".parquet":

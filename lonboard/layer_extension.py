@@ -1,4 +1,6 @@
-import traitlets
+from typing import ClassVar
+
+import traitlets as t
 
 from lonboard._base import BaseExtension
 from lonboard.traits import (
@@ -6,13 +8,14 @@ from lonboard.traits import (
     FilterValueAccessor,
     FloatAccessor,
     PointAccessor,
+    VariableLengthTuple,
 )
 
 
 class BrushingExtension(BaseExtension):
-    """
-    Adds GPU-based data brushing functionalities to layers. It allows the layer to
-    show/hide objects based on the current pointer position.
+    """Adds GPU-based data brushing functionalities to layers.
+
+    It allows the layer to show/hide objects based on the current pointer position.
 
     # Example
 
@@ -75,12 +78,12 @@ class BrushingExtension(BaseExtension):
     - Default: `None`.
     """
 
-    _extension_type = traitlets.Unicode("brushing").tag(sync=True)
+    _extension_type = t.Unicode("brushing").tag(sync=True)
 
-    _layer_traits = {
-        "brushing_enabled": traitlets.Bool(True).tag(sync=True),
-        "brushing_target": traitlets.Unicode(None, allow_none=True).tag(sync=True),
-        "brushing_radius": traitlets.Float(None, allow_none=True, min=0).tag(sync=True),
+    _layer_traits: ClassVar = {
+        "brushing_enabled": t.Bool(default_value=True).tag(sync=True),
+        "brushing_target": t.Unicode(None, allow_none=True).tag(sync=True),
+        "brushing_radius": t.Float(None, allow_none=True, min=0).tag(sync=True),
         "get_brushing_target": PointAccessor(None, allow_none=True),
     }
 
@@ -121,19 +124,19 @@ class CollisionFilterExtension(BaseExtension):
 
     """
 
-    _extension_type = traitlets.Unicode("collision-filter").tag(sync=True)
+    _extension_type = t.Unicode("collision-filter").tag(sync=True)
 
-    _layer_traits = {
-        "collision_enabled": traitlets.Bool(True).tag(sync=True),
-        "collision_group": traitlets.Unicode(None, allow_none=True).tag(sync=True),
+    _layer_traits: ClassVar = {
+        "collision_enabled": t.Bool(default_value=True).tag(sync=True),
+        "collision_group": t.Unicode(None, allow_none=True).tag(sync=True),
         "get_collision_priority": FloatAccessor(None, allow_none=True),
     }
 
 
 class DataFilterExtension(BaseExtension):
-    """
-    Adds GPU-based data filtering functionalities to layers. It allows the layer to
-    show/hide objects based on user-defined properties.
+    """Adds GPU-based data filtering functionalities to layers.
+
+    It allows the layer to show/hide objects based on user-defined properties.
 
     # Example
 
@@ -219,6 +222,29 @@ class DataFilterExtension(BaseExtension):
     This extension dynamically enables the following properties onto the layer(s) where
     it is included:
 
+    ## `filter_categories`
+
+    The list of categories that should be rendered. If an object's filtered category is
+    in the list, the object will be rendered; otherwise it will be hidden. This prop can
+    be updated on user input or animation with very little cost.
+
+    Format:
+
+    - If category_size is 1: ['category1', 'category2']
+    - If category_size is 2 to 4:
+        [['category1', 'category2', ...], ['category3', ...], ...] for each filtered
+        property, respectively.
+
+    The maximum number of supported is determined by the category_size:
+
+    - If category_size is 1: 128 categories
+    - If category_size is 2: 64 categories per dimension
+    - If category_size is 3 or 4: 32 categories per dimension.
+
+    If this value is exceeded any categories beyond the limit will be ignored.
+
+    Default: `[0]`
+
     ## `filter_enabled`
 
     Enable/disable the data filter. If the data filter is disabled, all objects are
@@ -275,48 +301,82 @@ class DataFilterExtension(BaseExtension):
 
     Accessor to retrieve the value for each object that it will be filtered by.
 
-    - Type:
-      [FilterValueAccessor][lonboard.traits.FilterValueAccessor]
+    - Type: [FilterValueAccessor][lonboard.traits.FilterValueAccessor]
         - If a scalar value is provided, it is used as the value for all objects.
-        - If an array is provided, each value in the array will be used as the value
-          for the object at the same row index.
+        - If an array is provided, each value in the array will be used as the value for
+          the object at the same row index.
+
+    ## `get_filter_category`
+
+    Accessor to retrieve the category for each object that it will be filtered by.
+
+    - Type: [FilterValueAccessor][lonboard.traits.FilterValueAccessor]
+        - If a scalar value is provided, it is used as the value for all objects.
+        - If an array is provided, each value in the array will be used as the value for
+          the object at the same row index.
     """
 
-    _extension_type = traitlets.Unicode("data-filter").tag(sync=True)
+    _extension_type = t.Unicode("data-filter").tag(sync=True)
 
-    _layer_traits = {
-        "filter_enabled": traitlets.Bool(True).tag(sync=True),
-        "filter_range": traitlets.Union(
+    _layer_traits: ClassVar = {
+        "filter_categories": t.Union(
             [
-                traitlets.List(traitlets.Float(), minlen=2, maxlen=2),
-                traitlets.List(
-                    traitlets.List(traitlets.Float(), minlen=2, maxlen=2),
+                VariableLengthTuple(t.Any()),
+                VariableLengthTuple(
+                    VariableLengthTuple(t.Any()),
                     minlen=2,
                     maxlen=4,
                 ),
-            ]
+            ],
+            default_value=None,
+            allow_none=True,
         ).tag(sync=True),
-        "filter_soft_range": traitlets.Tuple(
-            traitlets.Float(), traitlets.Float(), default_value=None, allow_none=True
+        "filter_enabled": t.Bool(default_value=True).tag(sync=True),
+        "filter_range": t.Union(
+            [
+                VariableLengthTuple(t.Float(), minlen=2, maxlen=2),
+                VariableLengthTuple(
+                    VariableLengthTuple(t.Float(), minlen=2, maxlen=2),
+                    minlen=2,
+                    maxlen=4,
+                ),
+            ],
+            default_value=None,
+            allow_none=True,
         ).tag(sync=True),
-        "filter_transform_size": traitlets.Bool(True).tag(sync=True),
-        "filter_transform_color": traitlets.Bool(True).tag(sync=True),
-        "get_filter_value": FilterValueAccessor(None, allow_none=False),
+        "filter_soft_range": t.Tuple(
+            t.Float(),
+            t.Float(),
+            default_value=None,
+            allow_none=True,
+        ).tag(sync=True),
+        "filter_transform_size": t.Bool(default_value=True).tag(sync=True),
+        "filter_transform_color": t.Bool(default_value=True).tag(sync=True),
+        "get_filter_value": FilterValueAccessor(default_value=None, allow_none=True),
+        "get_filter_category": FilterValueAccessor(default_value=None, allow_none=True),
     }
 
-    filter_size = traitlets.Int(1, min=1, max=4).tag(sync=True)
+    filter_size = t.Int(None, min=1, max=4, allow_none=True).tag(sync=True)
     """The size of the filter (number of columns to filter by).
 
     The data filter can show/hide data based on 1-4 numeric properties of each object.
 
-    - Type: `int`, optional
+    - Type: `int`. This is required if using range-based filtering.
     - Default 1.
+    """
+
+    category_size = t.Int(None, min=1, max=4, allow_none=True).tag(sync=True)
+    """The size of the category filter (number of columns to filter by).
+
+    The category filter can show/hide data based on 1-4 properties of each object.
+
+    - Type: `int`. This is required if using category-based filtering.
+    - Default 0.
     """
 
 
 class PathStyleExtension(BaseExtension):
-    """
-    Adds selected features to the PathLayer and composite layers that render
+    """Adds selected features to the PathLayer and composite layers that render
     the [PathLayer][lonboard.PathLayer], e.g. [PolygonLayer][lonboard.PolygonLayer].
 
     # Example
@@ -398,25 +458,25 @@ class PathStyleExtension(BaseExtension):
     The high precision mode pre-calculates path length on the CPU, so it may be slower
     and use more resources for large datasets. When a path contains a lot of short
     segments, this mode yields the best result.
-    """
+    """  # noqa: D205
 
-    _extension_type = traitlets.Unicode("path-style").tag(sync=True)
+    _extension_type = t.Unicode("path-style").tag(sync=True)
 
-    _layer_traits = {
+    _layer_traits: ClassVar = {
         "get_dash_array": DashArrayAccessor(None, allow_none=True),
-        "dash_justified": traitlets.Bool(None, allow_none=True).tag(sync=True),
+        "dash_justified": t.Bool(None, allow_none=True).tag(sync=True),
         "get_offset": FloatAccessor(None, allow_none=True),
-        "dash_gap_pickable": traitlets.Bool(None, allow_none=True).tag(sync=True),
+        "dash_gap_pickable": t.Bool(None, allow_none=True).tag(sync=True),
     }
 
-    dash = traitlets.Bool(None, allow_none=True).tag(sync=True)
+    dash = t.Bool(None, allow_none=True).tag(sync=True)
     """Add capability to render dashed lines.
 
     - Type: `boolean`, optional
     - Default False.
     """
 
-    high_precision_dash = traitlets.Bool(None, allow_none=True).tag(sync=True)
+    high_precision_dash = t.Bool(None, allow_none=True).tag(sync=True)
     """Improve dash rendering quality in certain circumstances.
 
     Note that this option introduces additional performance overhead. See "Remarks".
@@ -425,7 +485,7 @@ class PathStyleExtension(BaseExtension):
     - Default `False`.
     """
 
-    offset = traitlets.Bool(None, allow_none=True).tag(sync=True)
+    offset = t.Bool(None, allow_none=True).tag(sync=True)
     """Add capability to offset lines.
 
     - Type: `boolean`, optional

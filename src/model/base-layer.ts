@@ -17,6 +17,7 @@ export abstract class BaseLayerModel extends BaseModel {
   protected visible: LayerProps["visible"];
   protected opacity: LayerProps["opacity"];
   protected autoHighlight: LayerProps["autoHighlight"];
+  protected highlightColor: LayerProps["highlightColor"];
 
   protected extensions: BaseExtensionModel[];
 
@@ -32,6 +33,8 @@ export abstract class BaseLayerModel extends BaseModel {
     this.initRegularAttribute("visible", "visible");
     this.initRegularAttribute("opacity", "opacity");
     this.initRegularAttribute("auto_highlight", "autoHighlight");
+    this.initRegularAttribute("highlight_color", "highlightColor");
+    this.initRegularAttribute("selected_bounds", "selectedBounds");
 
     this.extensions = [];
   }
@@ -41,16 +44,19 @@ export abstract class BaseLayerModel extends BaseModel {
   }
 
   extensionInstances(): LayerExtension[] {
-    return this.extensions.map((extension) => extension.extensionInstance);
+    return this.extensions
+      .map((extension) => extension.extensionInstance())
+      .filter((extensionInstance) => extensionInstance !== null);
   }
 
   extensionProps() {
-    let props: Record<string, any> = {};
+    const props: Record<string, unknown> = {};
     for (const layerPropertyName of this.extensionLayerPropertyNames) {
       if (isDefined(this[layerPropertyName as keyof this])) {
         props[layerPropertyName] = this[layerPropertyName as keyof this];
       }
     }
+    // console.log("extension props", props);
     return props;
   }
 
@@ -62,8 +68,6 @@ export abstract class BaseLayerModel extends BaseModel {
   }
 
   baseLayerProps(): LayerProps {
-    // console.log("extensions", this.extensionInstances());
-    // console.log("extensionprops", this.extensionProps());
     return {
       extensions: this.extensionInstances(),
       ...this.extensionProps(),
@@ -72,6 +76,9 @@ export abstract class BaseLayerModel extends BaseModel {
       visible: this.visible,
       opacity: this.opacity,
       autoHighlight: this.autoHighlight,
+      ...(isDefined(this.highlightColor) && {
+        highlightColor: this.highlightColor,
+      }),
       onClick: this.onClick.bind(this),
     };
   }

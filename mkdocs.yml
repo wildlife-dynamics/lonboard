@@ -29,8 +29,8 @@ extra:
       link: "https://github.com/developmentseed"
     - icon: "fontawesome/brands/twitter"
       link: "https://twitter.com/developmentseed"
-    - icon: "fontawesome/brands/medium"
-      link: "https://medium.com/devseed"
+    - icon: "fontawesome/brands/linkedin"
+      link: "https://www.linkedin.com/company/development-seed"
   version:
     provider: mike
 
@@ -41,13 +41,17 @@ nav:
       - examples/internet-speeds.ipynb
       - examples/north-america-roads.ipynb
       - examples/overture-maps.ipynb
+      - examples/air-traffic-control.ipynb
       - examples/global-boundaries.ipynb
       - examples/migration.ipynb
       - examples/data-filter-extension.ipynb
+      - examples/column-layer.ipynb
+      - examples/linked-maps.ipynb
       - Integrations:
           - examples/duckdb.ipynb
           - ColorPicker: examples/integrations/color-picker.ipynb
           - Sidecar: examples/integrations/sidecar.ipynb
+          - examples/ais-movingpandas.ipynb
       - 30 Day Map Challenge:
           - "Day 1: Points": examples/map_challenge/1-points.ipynb
           - "Day 6: Asia": examples/map_challenge/6-asia.ipynb
@@ -57,6 +61,7 @@ nav:
       - Layers:
           - api/layers/bitmap-layer.md
           - api/layers/bitmap-tile-layer.md
+          - api/layers/column-layer.md
           - api/layers/heatmap-layer.md
           - api/layers/path-layer.md
           - api/layers/point-cloud-layer.md
@@ -78,18 +83,20 @@ nav:
           - Layers:
               - api/layers/arc-layer.md
               - api/layers/text-layer.md
+              - api/layers/trips-layer.md
   - cli.md
   - Ecosystem:
       - ecosystem/index.md
       - ecosystem/geopandas.md
       - ecosystem/duckdb.md
       - ecosystem/geoarrow.md
+      - ecosystem/pyodide.md
       - ecosystem/jupyter-widgets.md
       - ecosystem/panel.md
       - ecosystem/shiny.md
-
-  # - Caveats: caveats.md
+  - external-resources.md
   - Performance: performance.md
+  - troubleshooting.md
   - Changelog: CHANGELOG.md
   - Alternatives: alternatives.md
   - "How it works?":
@@ -157,13 +164,17 @@ plugins:
         python:
           paths: [lonboard]
           options:
-            show_root_heading: true
-            docstring_style: google
-            show_source: false
             docstring_section_style: list
-            separate_signature: true
-            show_signature_annotations: true
+            docstring_style: google
             line_length: 80
+            separate_signature: true
+            show_root_heading: true
+            show_signature_annotations: true
+            show_source: false
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+            extensions:
+              - griffe_inherited_docstrings
 
           import:
             - https://arrow.apache.org/docs/objects.inv
@@ -175,7 +186,9 @@ plugins:
             - https://geopy.readthedocs.io/en/stable/objects.inv
             - https://ipython.readthedocs.io/en/stable/objects.inv
             - https://ipywidgets.readthedocs.io/en/stable/objects.inv
+            - https://kylebarron.dev/arro3/latest/objects.inv
             - https://matplotlib.org/stable/objects.inv
+            - https://movingpandas.readthedocs.io/en/main/objects.inv
             - https://numpy.org/doc/stable/objects.inv
             - https://pandas.pydata.org/pandas-docs/stable/objects.inv
             - https://pola-rs.github.io/polars/py-polars/html/objects.inv

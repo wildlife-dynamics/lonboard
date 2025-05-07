@@ -1,21 +1,25 @@
-import sys
-from typing import Any, Dict, List, Union
+from __future__ import annotations
 
-from lonboard.basemap import CartoBasemap
-from lonboard._deck_widget import BaseDeckWidget
+import sys
+from typing import TYPE_CHECKING, Any
 
 if sys.version_info >= (3, 12):
     from typing import TypedDict
 else:
     from typing_extensions import TypedDict
 
+if TYPE_CHECKING:
+    from lonboard.basemap import CartoBasemap
+    from lonboard._deck_widget import BaseDeckWidget
 
 class MapKwargs(TypedDict, total=False):
+    """Kwargs to pass into map constructor."""
+
     _height: int
     basemap_style: Union[str, CartoBasemap]
     parameters: Dict[str, Any]
     deck_widgets: List[BaseDeckWidget]
     picking_radius: int
     show_tooltip: bool
-    use_device_pixels: Union[int, float, bool]
-    view_state: Dict[str, Any]
+    use_device_pixels: int | float | bool
+    view_state: dict[str, Any]

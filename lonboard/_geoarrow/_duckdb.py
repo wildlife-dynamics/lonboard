@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.compute as pc
+from arro3.core import (
+    Array,
+    ChunkedArray,
+    Field,
+    Table,
+    fixed_size_list_array,
+    list_array,
+    struct_field,
+)
+from duckdb import ColumnExpression, FunctionExpression
 
 from lonboard._constants import EXTENSION_NAME
 
@@ -27,9 +35,8 @@ DUCKDB_SPATIAL_TYPES = {
 def from_duckdb(
     rel: duckdb.DuckDBPyRelation,
     *,
-    con: Optional[duckdb.DuckDBPyConnection] = None,
-    crs: Optional[Union[str, pyproj.CRS]] = None,
-) -> pa.Table:
+    crs: str | pyproj.CRS | None = None,
+) -> Table:
     geom_col_idxs = [
         i for i, t in enumerate(rel.types) if str(t) in DUCKDB_SPATIAL_TYPES
     ]
@@ -51,87 +58,80 @@ def from_duckdb(
     geom_type = rel.types[geom_col_idx]
     if geom_type == "WKB_BLOB":
         return _from_geoarrow(
-            rel, extension_type=EXTENSION_NAME.WKB, geom_col_idx=geom_col_idx, crs=crs
+            rel,
+            extension_type=EXTENSION_NAME.WKB,
+            geom_col_idx=geom_col_idx,
+            crs=crs,
         )
-    elif geom_type == "GEOMETRY":
-        return _from_geometry(rel, con=con, geom_col_idx=geom_col_idx, crs=crs)
-    elif geom_type == "POINT_2D":
+    if geom_type == "GEOMETRY":
+        return _from_geometry(rel, geom_col_idx=geom_col_idx, crs=crs)
+    if geom_type == "POINT_2D":
         return _from_geoarrow(
-            rel, extension_type=EXTENSION_NAME.POINT, geom_col_idx=geom_col_idx, crs=crs
+            rel,
+            extension_type=EXTENSION_NAME.POINT,
+            geom_col_idx=geom_col_idx,
+            crs=crs,
         )
-    elif geom_type == "LINESTRING_2D":
+    if geom_type == "LINESTRING_2D":
         return _from_geoarrow(
             rel,
             extension_type=EXTENSION_NAME.LINESTRING,
             geom_col_idx=geom_col_idx,
             crs=crs,
         )
-    elif geom_type == "POLYGON_2D":
+    if geom_type == "POLYGON_2D":
         return _from_geoarrow(
             rel,
             extension_type=EXTENSION_NAME.POLYGON,
             geom_col_idx=geom_col_idx,
             crs=crs,
         )
-    elif geom_type == "BOX_2D":
+    if geom_type == "BOX_2D":
         return _from_box2d(
             rel,
             geom_col_idx=geom_col_idx,
             crs=crs,
         )
-    else:
-        raise ValueError(f"Unsupported geometry type: {geom_type}")
+    raise ValueError(f"Unsupported geometry type: {geom_type}")
 
 
 def _from_geometry(
     rel: duckdb.DuckDBPyRelation,
     *,
-    con: Optional[duckdb.DuckDBPyConnection] = None,
     geom_col_idx: int,
-    crs: Optional[Union[str, pyproj.CRS]] = None,
-) -> pa.Table:
+    crs: str | pyproj.CRS | None = None,
+) -> Table:
     other_col_names = [name for i, name in enumerate(rel.columns) if i != geom_col_idx]
-    non_geo_table = rel.select(*other_col_names).arrow()
+    if other_col_names:
+        non_geo_table = Table.from_arrow(rel.select(*other_col_names).arrow())
+    else:
+        non_geo_table = None
     geom_col_name = rel.columns[geom_col_idx]
 
     # A poor-man's string interpolation check
     # We can't pass in SQL-templated strings for the column name
     re_match = r"[a-zA-Z][a-zA-Z0-9_]*"
-    assert re.match(
-        re_match, geom_col_name
+    assert re.fullmatch(
+        re_match,
+        geom_col_name,
     ), f"Expected geometry column name to match regex: {re_match}"
 
-    if con is not None:
-        geom_table = con.sql(f"""
-        SELECT ST_AsWKB( {geom_col_name} ) as {geom_col_name} FROM rel;
-        """).arrow()
-    else:
-        import duckdb
-
-        # We need to re-import the spatial extension because this is a different context
-        # as the user's context.
-        # It would be nice to re-use the user's context, but in the case of `viz` where
-        # we want to visualize a single input object, we want to accept a
-        # DuckDBPyRelation as input.
-        sql = f"""
-            INSTALL spatial;
-            LOAD spatial;
-            SELECT ST_AsWKB( {geom_col_name} ) as {geom_col_name} FROM rel;
-            """
-        try:
-            geom_table = duckdb.execute(sql).arrow()
-        except duckdb.CatalogException as err:
-            msg = (
-                "Could not coerce type GEOMETRY to WKB.\n"
-                "This often happens from using a custom DuckDB connection object.\n"
-                "Either pass in a `con` object containing the DuckDB connection or "
-                "cast to WKB manually with `ST_AsWKB`."
-            )
-            raise ValueError(msg) from err
+    geom_table = Table.from_arrow(
+        rel.select(
+            FunctionExpression("st_aswkb", ColumnExpression(geom_col_name)).alias(
+                geom_col_name,
+            ),
+        ).arrow(),
+    )
 
     metadata = _make_geoarrow_field_metadata(EXTENSION_NAME.WKB, crs)
     geom_field = geom_table.schema.field(0).with_metadata(metadata)
-    return non_geo_table.append_column(geom_field, geom_table.column(0))
+    if non_geo_table is not None:
+        return non_geo_table.append_column(geom_field, geom_table.column(0))
+    # Need to set geospatial metadata onto the Arrow table, because the table
+    # returned from duckdb has none.
+    new_schema = geom_table.schema.set(0, geom_field)
+    return geom_table.with_schema(new_schema)
 
 
 def _from_geoarrow(
@@ -139,9 +139,9 @@ def _from_geoarrow(
     *,
     extension_type: EXTENSION_NAME,
     geom_col_idx: int,
-    crs: Optional[Union[str, pyproj.CRS]] = None,
-) -> pa.Table:
-    table = rel.arrow()
+    crs: str | pyproj.CRS | None = None,
+) -> Table:
+    table = Table.from_arrow(rel.arrow())
     metadata = _make_geoarrow_field_metadata(extension_type, crs)
     geom_field = table.schema.field(geom_col_idx).with_metadata(metadata)
     return table.set_column(geom_col_idx, geom_field, table.column(geom_col_idx))
@@ -151,35 +151,36 @@ def _from_box2d(
     rel: duckdb.DuckDBPyRelation,
     *,
     geom_col_idx: int,
-    crs: Optional[Union[str, pyproj.CRS]] = None,
-) -> pa.Table:
-    table = rel.arrow()
+    crs: str | pyproj.CRS | None = None,
+) -> Table:
+    table = Table.from_arrow(rel.arrow())
     geom_col = table.column(geom_col_idx)
 
-    polygon_array = _convert_box2d_to_geoarrow_polygon_array(geom_col)
+    polygon_chunks: list[Array] = []
+    for geom_chunk in geom_col.chunks:
+        polygon_array = _convert_box2d_to_geoarrow_polygon_array(geom_chunk)
+        polygon_chunks.append(polygon_array)
 
     metadata = _make_geoarrow_field_metadata(EXTENSION_NAME.POLYGON, crs)
     prev_field = table.schema.field(geom_col_idx)
-    geom_field = pa.field(prev_field.name, polygon_array.type, metadata=metadata)
-    return table.set_column(geom_col_idx, geom_field, polygon_array)
+    geom_field = Field(prev_field.name, polygon_chunks[0].type, metadata=metadata)
+    return table.set_column(geom_col_idx, geom_field, ChunkedArray(polygon_chunks))
 
 
 def _convert_box2d_to_geoarrow_polygon_array(
-    geom_col: pa.StructArray,
-) -> pa.ListArray:
-    """
-    This is a manual conversion of the duckdb box_2d type to a GeoArrow Polygon array.
+    geom_col: Array,
+) -> Array:
+    """Manual conversion of the duckdb box_2d type to a GeoArrow Polygon array.
 
     We don't wish to add dependencies so we reimplement this here using numpy.
     """
-
     # Extract the bounding box columns from the Arrow struct
     # NOTE: this assumes that the box ordering is minx, miny, maxx, maxy
     # Note sure whether the positional ordering or the named fields is more stable
-    min_x = pc.struct_field(geom_col, 0)
-    min_y = pc.struct_field(geom_col, 1)
-    max_x = pc.struct_field(geom_col, 2)
-    max_y = pc.struct_field(geom_col, 3)
+    min_x = struct_field(geom_col, 0)
+    min_y = struct_field(geom_col, 1)
+    max_x = struct_field(geom_col, 2)
+    max_y = struct_field(geom_col, 3)
 
     # Provision memory for the output coordinates. For closed polygons, each input box
     # becomes 5 coordinates.
@@ -208,16 +209,16 @@ def _convert_box2d_to_geoarrow_polygon_array(
     geom_offsets = np.arange(0, len(ring_offsets), dtype=np.int32)
 
     # Construct the final PolygonArray
-    coords = pa.FixedSizeListArray.from_arrays(coords.ravel("C"), 2)
-    ring_array = pa.ListArray.from_arrays(ring_offsets, coords)
-    polygon_array = pa.ListArray.from_arrays(geom_offsets, ring_array)
-    return polygon_array
+    coords = fixed_size_list_array(coords.ravel("C"), 2)
+    ring_array = list_array(ring_offsets, coords)
+    polygon_array = list_array(geom_offsets, ring_array)
+    return polygon_array  # noqa: RET504
 
 
 # TODO: refactor, put helper in lonboard._geoarrow.crs?
 def _make_geoarrow_field_metadata(
     extension_type: EXTENSION_NAME,
-    crs: Optional[Union[str, pyproj.CRS]] = None,
+    crs: str | pyproj.CRS | None = None,
 ) -> dict[bytes, bytes]:
     import pyproj
 

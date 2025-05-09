@@ -36,9 +36,6 @@ export abstract class CustomDeckWidgetModel extends BaseDeckWidgetModel {
   }
 
   update_position(): void {
-    console.log("position updated");
-    console.log(this.placementX);
-    console.log(this.placementY);
     if (this.placementX && this.placementY) {
       this.style = {
         ...this.style,

@@ -232,7 +232,7 @@ class Map(BaseAnyWidget):
     """Whether or not the map is interactive
     """
 
-    basemap_style = traitlets.Unicode(CartoBasemap.PositronNoLabels).tag(sync=True)
+    basemap_style = BasemapUrl(CartoBasemap.PositronNoLabels)
     """
     A URL to a MapLibre-compatible basemap style.
 

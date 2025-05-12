@@ -30,10 +30,9 @@ export class TitleWidget implements Widget<TitleWidgetProps> {
   constructor(props: TitleWidgetProps) {
     this.id = props.id || "title";
     this.placement = props.placement || "top-right";
-    props.title = props.title;
-    props.style = props.style || {};
     this.className = props.className || "deck-widget-title";
     this.props = props;
+    this.props.style = this.props.style || {};
   }
 
   setProps(props: Partial<TitleWidgetProps>) {
@@ -89,11 +88,10 @@ export class LegendWidget implements Widget<LegendWidgetProps> {
   constructor(props: LegendWidgetProps) {
     this.id = props.id || "legend";
     this.placement = props.placement || "bottom-right";
-    props.title = props.title || "Legend";
-    props.legend = props.legend;
-    props.style = props.style || {};
     this.className = props.className || "deck-widget-legend";
     this.props = props;
+    this.props.style = this.props.style || {};
+    this.props.title = this.props.title || "Legend";
   }
 
   setProps(props: Partial<LegendWidgetProps>) {
@@ -152,6 +150,7 @@ export class LegendWidget implements Widget<LegendWidgetProps> {
 export class NorthArrowWidget extends CompassWidget {
   root?: Root;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onAdd({ deck }: { deck: Deck<any> }): HTMLDivElement {
     const { style, className } = this.props;
     const element = document.createElement("div");
@@ -239,6 +238,7 @@ export class ScaleWidget implements Widget<ScaleWidgetProps> {
     this.update();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onAdd({ deck }: { deck: Deck<any> }): HTMLDivElement {
     const { style, className } = this.props;
     const element = document.createElement("div");
@@ -261,7 +261,7 @@ export class ScaleWidget implements Widget<ScaleWidgetProps> {
   update() {
     if (this.viewport instanceof WebMercatorViewport) {
       const meters = this.viewport.metersPerPixel * this.props.maxWidth;
-      let distance, label, ratio;
+      let distance, label
 
       if (this.props.useImperial) {
         const feet = meters * 3.2808399;
@@ -277,7 +277,7 @@ export class ScaleWidget implements Widget<ScaleWidgetProps> {
         label = meters < 1000 ? `m` : `km`;
       }
 
-      ratio = this.roundNumber(distance) / distance;
+      const ratio = this.roundNumber(distance) / distance;
       distance = this.roundNumber(distance);
       const width = `${Math.round(this.props.maxWidth * ratio * (4 / 3))}px`;
 
@@ -312,13 +312,13 @@ export class ScaleWidget implements Widget<ScaleWidgetProps> {
               x="42.5%"
               y="22%"
             />
-            <text id="zero" text-anchor="middle" font-size="20" x="5%" y="95%">
+            <text id="zero" textAnchor="middle" fontSize="20" x="5%" y="95%">
               0
             </text>
             <text
               id="half_scale"
-              font-size="20"
-              text-anchor="middle"
+              fontSize="20"
+              textAnchor="middle"
               x="42.5%"
               y="95%"
             >
@@ -326,14 +326,14 @@ export class ScaleWidget implements Widget<ScaleWidgetProps> {
             </text>
             <text
               id="scale"
-              font-size="20"
-              text-anchor="middle"
+              fontSize="20"
+              textAnchor="middle"
               x="80%"
               y="95%"
             >
               {distance}
             </text>
-            <text id="unit" font-size="20" x="82%" y="42%">
+            <text id="unit" fontSize="20" x="82%" y="42%">
               {label}
             </text>
           </svg>
@@ -376,6 +376,7 @@ export class SaveImageWidget implements Widget<SaveImageWidgetProps> {
   placement: WidgetPlacement = "top-right";
   viewId?: string | null = null;
   viewport?: Viewport;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deck?: Deck<any>;
   element?: HTMLDivElement;
 
@@ -387,6 +388,7 @@ export class SaveImageWidget implements Widget<SaveImageWidgetProps> {
     this.props = props;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onAdd({ deck }: { deck: Deck<any> }): HTMLDivElement {
     const { style, className } = this.props;
     const element = document.createElement("div");
@@ -448,7 +450,7 @@ export class SaveImageWidget implements Widget<SaveImageWidgetProps> {
       if (deck_wrapper) {
         toPng(deck_wrapper)
           .then(function (dataUrl) {
-            var img = new Image();
+            const img = new Image();
             img.src = dataUrl;
 
             const a = document.createElement("a");

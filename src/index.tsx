@@ -109,16 +109,16 @@ async function getDeckWidgetModelState(
 }
 
 function App() {
-  let model = useModel();
+  const model = useModel();
 
-  let [mapStyle] = useModelState<string>("basemap_style");
-  let [mapHeight] = useModelState<number>("height");
-  let [mapWidth] = useModelState<number>("width");
-  let [showTooltip] = useModelState<boolean>("show_tooltip");
-  let [pickingRadius] = useModelState<number>("picking_radius");
-  let [useDevicePixels] = useModelState<number | boolean>("use_device_pixels");
-  let [parameters] = useModelState<object>("parameters");
-  let [controller] = useModelState<boolean>("controller");
+  const [mapStyle] = useModelState<string>("basemap_style");
+  const [mapHeight] = useModelState<number>("height");
+  const [mapWidth] = useModelState<number>("width");
+  const [showTooltip] = useModelState<boolean>("show_tooltip");
+  const [pickingRadius] = useModelState<number>("picking_radius");
+  const [useDevicePixels] = useModelState<number | boolean>("use_device_pixels");
+  const [parameters] = useModelState<object>("parameters");
+  const [controller] = useModelState<boolean>("controller");
 
   // initialViewState is the value of view_state on the Python side. This is
   // called `initial` here because it gets passed in to deck's
@@ -133,7 +133,7 @@ function App() {
     useViewStateDebounced<MapViewState>("view_state");
 
   // Handle custom messages
-  model.on("msg:custom", (msg: Message, buffers) => {
+  model.on("msg:custom", (msg: Message) => {
     switch (msg.type) {
       case "fly-to":
         flyTo(msg, setViewState);
@@ -146,19 +146,20 @@ function App() {
 
   const [mapId] = useState(uuidv4());
 
-  let [subModelState, setSubModelState] = useState<
+  const [subModelState, setSubModelState] = useState<
     Record<string, BaseLayerModel>
   >({});
 
-  let [deckWidgetState, setDeckWidgetState] = useState<
+  const [deckWidgetState, setDeckWidgetState] = useState<
     Record<string, BaseDeckWidgetModel>
   >({});
 
-  let [childLayerIds] = useModelState<string[]>("layers");
-  let [deckWidgetIds] = useModelState<string[]>("deck_widgets");
+  const [childLayerIds] = useModelState<string[]>("layers");
+  const [deckWidgetIds] = useModelState<string[]>("deck_widgets");
 
   // Fake state just to get react to re-render when a model callback is called
-  let [stateCounter, setStateCounter] = useState<Date>(new Date());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [stateCounter, setStateCounter] = useState<Date>(new Date());
 
   useEffect(() => {
     const callback = async () => {
@@ -239,7 +240,7 @@ function App() {
         widgets={deckWidgets}
         width={mapWidth}
         height={mapHeight}
-        // @ts-expect-error
+        // @ts-expect-error doesn't see that GeoArrowPickingInfo extends PickingInfo
         getTooltip={showTooltip && getTooltip}
         pickingRadius={pickingRadius}
         useDevicePixels={isDefined(useDevicePixels) ? useDevicePixels : true}

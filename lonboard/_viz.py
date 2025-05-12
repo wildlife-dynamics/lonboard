@@ -230,7 +230,6 @@ def viz_layer(
     """Same as viz but returns only the created layers
     """
     color_ordering = COLORS.copy()
-    shuffle(color_ordering)
 
     if isinstance(data, (list, tuple)):
         layers: List[Union[ScatterplotLayer, PathLayer, PolygonLayer]] = []

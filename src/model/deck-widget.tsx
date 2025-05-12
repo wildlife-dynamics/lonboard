@@ -261,7 +261,7 @@ export class ScaleWidget implements Widget<ScaleWidgetProps> {
   update() {
     if (this.viewport instanceof WebMercatorViewport) {
       const meters = this.viewport.metersPerPixel * this.props.maxWidth;
-      let distance, label
+      let distance, label;
 
       if (this.props.useImperial) {
         const feet = meters * 3.2808399;
@@ -324,13 +324,7 @@ export class ScaleWidget implements Widget<ScaleWidgetProps> {
             >
               {distance / 2}
             </text>
-            <text
-              id="scale"
-              fontSize="20"
-              textAnchor="middle"
-              x="80%"
-              y="95%"
-            >
+            <text id="scale" fontSize="20" textAnchor="middle" x="80%" y="95%">
               {distance}
             </text>
             <text id="unit" fontSize="20" x="82%" y="42%">

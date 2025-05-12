@@ -116,7 +116,9 @@ function App() {
   const [mapWidth] = useModelState<number>("width");
   const [showTooltip] = useModelState<boolean>("show_tooltip");
   const [pickingRadius] = useModelState<number>("picking_radius");
-  const [useDevicePixels] = useModelState<number | boolean>("use_device_pixels");
+  const [useDevicePixels] = useModelState<number | boolean>(
+    "use_device_pixels",
+  );
   const [parameters] = useModelState<object>("parameters");
   const [controller] = useModelState<boolean>("controller");
 

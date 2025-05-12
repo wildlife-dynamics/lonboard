@@ -1,11 +1,21 @@
 import type { WidgetModel } from "@jupyter-widgets/base";
 import { BaseModel } from "./base.js";
 import { Widget, WidgetPlacement } from "@deck.gl/core";
-import { CompassWidget, ZoomWidget, FullscreenWidget, LightTheme } from "@deck.gl/widgets";
-import { LegendWidget, NorthArrowWidget, TitleWidget, ScaleWidget, SaveImageWidget } from "./deck-widget.js";
+import {
+  CompassWidget,
+  ZoomWidget,
+  FullscreenWidget,
+  LightTheme,
+} from "@deck.gl/widgets";
+import {
+  LegendWidget,
+  NorthArrowWidget,
+  TitleWidget,
+  ScaleWidget,
+  SaveImageWidget,
+} from "./deck-widget.js";
 
 export abstract class BaseDeckWidgetModel extends BaseModel {
-
   protected placement: WidgetPlacement = "top-left";
   protected className: string | undefined = undefined;
   protected style: Partial<CSSStyleDeclaration> = {};
@@ -22,7 +32,6 @@ export abstract class BaseDeckWidgetModel extends BaseModel {
 }
 
 export abstract class CustomDeckWidgetModel extends BaseDeckWidgetModel {
-
   protected placementX: string | undefined = undefined;
   protected placementY: string | undefined = undefined;
 
@@ -72,11 +81,11 @@ export class FullscreenWidgetModel extends BaseDeckWidgetModel {
       enterLabel: this.enterLabel,
       exitLabel: this.exitLabel,
       style: {
-        ...LightTheme as Partial<CSSStyleDeclaration>,
+        ...(LightTheme as Partial<CSSStyleDeclaration>),
         ...this.style,
       },
       className: this.className,
-    }) 
+    });
   }
 }
 
@@ -103,11 +112,11 @@ export class ZoomWidgetModel extends BaseDeckWidgetModel {
       zoomOutLabel: this.zoomOutLabel,
       transitionDuration: this.transitionDuration,
       style: {
-        ...LightTheme as Partial<CSSStyleDeclaration>,
+        ...(LightTheme as Partial<CSSStyleDeclaration>),
         ...this.style,
       },
       className: this.className,
-    }) 
+    });
   }
 }
 
@@ -131,11 +140,11 @@ export class CompassWidgetModel extends BaseDeckWidgetModel {
       label: this.label,
       transitionDuration: this.transitionDuration,
       style: {
-        ...LightTheme as Partial<CSSStyleDeclaration>,
+        ...(LightTheme as Partial<CSSStyleDeclaration>),
         ...this.style,
       },
       className: this.className,
-    }) 
+    });
   }
 }
 
@@ -159,15 +168,15 @@ export class NorthArrowWidgetModel extends CustomDeckWidgetModel {
       label: this.label,
       transitionDuration: this.transitionDuration,
       style: {
-        ...LightTheme as Partial<CSSStyleDeclaration>,
+        ...(LightTheme as Partial<CSSStyleDeclaration>),
         ...this.style,
       },
       className: this.className,
-    }) 
+    });
   }
 }
 
-export class TitleWidgetModel extends CustomDeckWidgetModel{
+export class TitleWidgetModel extends CustomDeckWidgetModel {
   static widgetType = "title";
 
   protected title: string = "";
@@ -183,19 +192,19 @@ export class TitleWidgetModel extends CustomDeckWidgetModel{
   render() {
     this.update_position();
     return new TitleWidget({
-      id:  "title", 
-      title: this.title, 
-      placement: this.placement, 
+      id: "title",
+      title: this.title,
+      placement: this.placement,
       style: {
         ...LightTheme,
         ...this.style,
       },
       className: this.className,
-    })
+    });
   }
 }
 
-export class LegendWidgetModel extends CustomDeckWidgetModel{
+export class LegendWidgetModel extends CustomDeckWidgetModel {
   static widgetType = "legend";
 
   protected title: string = "Legend";
@@ -211,27 +220,27 @@ export class LegendWidgetModel extends CustomDeckWidgetModel{
   }
 
   render() {
-    const legend = new Map<string,string>()
+    const legend = new Map<string, string>();
     for (const i in this.labels) {
       legend.set(this.labels[i], this.colors[i]);
     }
 
     this.update_position();
     return new LegendWidget({
-      id:  "legend", 
-      title: this.title, 
+      id: "legend",
+      title: this.title,
       legend: legend,
-      placement: this.placement, 
+      placement: this.placement,
       style: {
         // ...LightTheme,
         ...this.style,
       },
       className: this.className,
-    })
+    });
   }
 }
 
-export class ScaleWidgetModel extends CustomDeckWidgetModel{
+export class ScaleWidgetModel extends CustomDeckWidgetModel {
   static widgetType = "scale";
 
   protected maxWidth: number = 300;
@@ -246,8 +255,8 @@ export class ScaleWidgetModel extends CustomDeckWidgetModel{
 
   render() {
     return new ScaleWidget({
-      id:  "scale", 
-      placement: this.placement, 
+      id: "scale",
+      placement: this.placement,
       style: {
         // ...LightTheme,
         ...this.style,
@@ -255,11 +264,11 @@ export class ScaleWidgetModel extends CustomDeckWidgetModel{
       maxWidth: this.maxWidth,
       useImperial: this.useImperial,
       className: this.className,
-    })
+    });
   }
 }
 
-export class SaveImageWidgetModel extends CustomDeckWidgetModel{
+export class SaveImageWidgetModel extends CustomDeckWidgetModel {
   static widgetType = "save-image";
 
   protected label: string = "";
@@ -272,18 +281,17 @@ export class SaveImageWidgetModel extends CustomDeckWidgetModel{
 
   render() {
     return new SaveImageWidget({
-      id:  "save-image", 
-      label: this.label, 
-      placement: this.placement, 
+      id: "save-image",
+      label: this.label,
+      placement: this.placement,
       style: {
         ...LightTheme,
         ...this.style,
       },
       className: this.className,
-    })
+    });
   }
 }
-
 
 export async function initializeWidget(
   model: WidgetModel,
@@ -310,19 +318,19 @@ export async function initializeWidget(
 
     case NorthArrowWidgetModel.widgetType:
       deckWidgetModel = new NorthArrowWidgetModel(model, updateStateCallback);
-      break;  
+      break;
 
     case LegendWidgetModel.widgetType:
       deckWidgetModel = new LegendWidgetModel(model, updateStateCallback);
-      break;  
+      break;
 
     case ScaleWidgetModel.widgetType:
       deckWidgetModel = new ScaleWidgetModel(model, updateStateCallback);
       break;
-      
+
     case SaveImageWidgetModel.widgetType:
-        deckWidgetModel = new SaveImageWidgetModel(model, updateStateCallback);
-        break;  
+      deckWidgetModel = new SaveImageWidgetModel(model, updateStateCallback);
+      break;
 
     default:
       throw new Error(`no widget supported for ${deckWidgetType}`);

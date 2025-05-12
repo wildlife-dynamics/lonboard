@@ -2,27 +2,27 @@
   font-size: 26px;
   font-style: normal;
   font-family: Helvetica;
-  color: rgb(0,0,0);
+  color: rgb(0, 0, 0);
   background-color: rgb(255, 255, 255);
   outline-width: 0px;
   outline-style: solid;
-  outline-color: rgb(0,0,0);
+  outline-color: rgb(0, 0, 0);
   border-radius: 5px;
   border-width: 1px;
   border-style: solid;
-  border-color: rgb(0,0,0);
+  border-color: rgb(0, 0, 0);
   padding: 3px;
   text-align: center;
 }
 
 .deck-widget.deck-widget-legend {
   background-color: rgb(255, 255, 255);
-  border-color: rgb(0,0,0);
+  border-color: rgb(0, 0, 0);
   border-style: solid;
   border-radius: 5px;
   border-width: 1px;
-  padding: 10px; 
-  font-size:14px; 
+  padding: 10px;
+  font-size: 14px;
   font-family: "Helvetica";
 }
 
@@ -30,11 +30,11 @@
   text-align: left;
   margin-bottom: 5px;
   font-weight: bold;
-  font-size:16px; 
+  font-size: 16px;
   color: rgba(0, 0, 0, 1);
-  }
+}
 
-.legend-scale ul{
+.legend-scale ul {
   list-style: none;
   margin: 0;
   margin-bottom: 5px;

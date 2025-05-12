@@ -14,9 +14,12 @@ import { v4 as uuidv4 } from "uuid";
 import { Message } from "./types.js";
 import { flyTo } from "./actions/fly-to.js";
 import { useViewStateDebounced } from "./state";
-import { BaseDeckWidgetModel, initializeWidget } from "./model/deck-widget-models.js";
-import '@deck.gl/widgets/stylesheet.css';
-import './widget-style.css'
+import {
+  BaseDeckWidgetModel,
+  initializeWidget,
+} from "./model/deck-widget-models.js";
+import "@deck.gl/widgets/stylesheet.css";
+import "./widget-style.css";
 
 await initParquetWasm();
 
@@ -28,7 +31,7 @@ const DEFAULT_INITIAL_VIEW_STATE = {
   pitch: 0,
 };
 
-const MAP_VIEW = new MapView({repeat: true});
+const MAP_VIEW = new MapView({ repeat: true });
 
 const DEFAULT_MAP_STYLE =
   "https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json";
@@ -84,12 +87,16 @@ async function getDeckWidgetModelState(
     // a new one
     if (deckWidgetId in previousSubModelState) {
       // pop from old state
-      newDeckWidgetModelState[deckWidgetId] = previousSubModelState[deckWidgetId];
+      newDeckWidgetModelState[deckWidgetId] =
+        previousSubModelState[deckWidgetId];
       delete previousSubModelState[deckWidgetId];
       continue;
     }
 
-    const deckWidget = await initializeWidget(deckWidgetModel, updateStateCallback);
+    const deckWidget = await initializeWidget(
+      deckWidgetModel,
+      updateStateCallback,
+    );
     newDeckWidgetModelState[deckWidgetId] = deckWidget;
   }
 
@@ -178,7 +185,6 @@ function App() {
         setStateCounter,
       );
       setDeckWidgetState(newDeckWidgetState);
-
     };
     callback().catch(console.error);
   }, [childLayerIds]);
@@ -215,7 +221,10 @@ function App() {
   }, []);
 
   return (
-    <div id={`map-${mapId}`} style={{ height: mapHeight || "100%", width: mapWidth || "100%" }}>
+    <div
+      id={`map-${mapId}`}
+      style={{ height: mapHeight || "100%", width: mapWidth || "100%" }}
+    >
       <DeckGL
         initialViewState={
           ["longitude", "latitude", "zoom"].every((key) =>

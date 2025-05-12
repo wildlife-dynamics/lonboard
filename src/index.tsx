@@ -14,9 +14,12 @@ import { v4 as uuidv4 } from "uuid";
 import { Message } from "./types.js";
 import { flyTo } from "./actions/fly-to.js";
 import { useViewStateDebounced } from "./state";
-import { BaseDeckWidgetModel, initializeWidget } from "./model/deck-widget-models.js";
-import '@deck.gl/widgets/stylesheet.css';
-import './widget-style.css'
+import {
+  BaseDeckWidgetModel,
+  initializeWidget,
+} from "./model/deck-widget-models.js";
+import "@deck.gl/widgets/stylesheet.css";
+import "./widget-style.css";
 
 await initParquetWasm();
 
@@ -28,7 +31,7 @@ const DEFAULT_INITIAL_VIEW_STATE = {
   pitch: 0,
 };
 
-const MAP_VIEW = new MapView({repeat: true});
+const MAP_VIEW = new MapView({ repeat: true });
 
 const DEFAULT_MAP_STYLE =
   "https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json";
@@ -84,12 +87,16 @@ async function getDeckWidgetModelState(
     // a new one
     if (deckWidgetId in previousSubModelState) {
       // pop from old state
-      newDeckWidgetModelState[deckWidgetId] = previousSubModelState[deckWidgetId];
+      newDeckWidgetModelState[deckWidgetId] =
+        previousSubModelState[deckWidgetId];
       delete previousSubModelState[deckWidgetId];
       continue;
     }
 
-    const deckWidget = await initializeWidget(deckWidgetModel, updateStateCallback);
+    const deckWidget = await initializeWidget(
+      deckWidgetModel,
+      updateStateCallback,
+    );
     newDeckWidgetModelState[deckWidgetId] = deckWidget;
   }
 
@@ -102,16 +109,18 @@ async function getDeckWidgetModelState(
 }
 
 function App() {
-  let model = useModel();
+  const model = useModel();
 
-  let [mapStyle] = useModelState<string>("basemap_style");
-  let [mapHeight] = useModelState<number>("height");
-  let [mapWidth] = useModelState<number>("width");
-  let [showTooltip] = useModelState<boolean>("show_tooltip");
-  let [pickingRadius] = useModelState<number>("picking_radius");
-  let [useDevicePixels] = useModelState<number | boolean>("use_device_pixels");
-  let [parameters] = useModelState<object>("parameters");
-  let [controller] = useModelState<boolean>("controller");
+  const [mapStyle] = useModelState<string>("basemap_style");
+  const [mapHeight] = useModelState<number>("height");
+  const [mapWidth] = useModelState<number>("width");
+  const [showTooltip] = useModelState<boolean>("show_tooltip");
+  const [pickingRadius] = useModelState<number>("picking_radius");
+  const [useDevicePixels] = useModelState<number | boolean>(
+    "use_device_pixels",
+  );
+  const [parameters] = useModelState<object>("parameters");
+  const [controller] = useModelState<boolean>("controller");
 
   // initialViewState is the value of view_state on the Python side. This is
   // called `initial` here because it gets passed in to deck's
@@ -126,7 +135,7 @@ function App() {
     useViewStateDebounced<MapViewState>("view_state");
 
   // Handle custom messages
-  model.on("msg:custom", (msg: Message, buffers) => {
+  model.on("msg:custom", (msg: Message) => {
     switch (msg.type) {
       case "fly-to":
         flyTo(msg, setViewState);
@@ -139,19 +148,20 @@ function App() {
 
   const [mapId] = useState(uuidv4());
 
-  let [subModelState, setSubModelState] = useState<
+  const [subModelState, setSubModelState] = useState<
     Record<string, BaseLayerModel>
   >({});
 
-  let [deckWidgetState, setDeckWidgetState] = useState<
+  const [deckWidgetState, setDeckWidgetState] = useState<
     Record<string, BaseDeckWidgetModel>
   >({});
 
-  let [childLayerIds] = useModelState<string[]>("layers");
-  let [deckWidgetIds] = useModelState<string[]>("deck_widgets");
+  const [childLayerIds] = useModelState<string[]>("layers");
+  const [deckWidgetIds] = useModelState<string[]>("deck_widgets");
 
   // Fake state just to get react to re-render when a model callback is called
-  let [stateCounter, setStateCounter] = useState<Date>(new Date());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [stateCounter, setStateCounter] = useState<Date>(new Date());
 
   useEffect(() => {
     const callback = async () => {
@@ -178,7 +188,6 @@ function App() {
         setStateCounter,
       );
       setDeckWidgetState(newDeckWidgetState);
-
     };
     callback().catch(console.error);
   }, [childLayerIds]);
@@ -215,7 +224,10 @@ function App() {
   }, []);
 
   return (
-    <div id={`map-${mapId}`} style={{ height: mapHeight || "100%", width: mapWidth || "100%" }}>
+    <div
+      id={`map-${mapId}`}
+      style={{ height: mapHeight || "100%", width: mapWidth || "100%" }}
+    >
       <DeckGL
         initialViewState={
           ["longitude", "latitude", "zoom"].every((key) =>
@@ -230,7 +242,7 @@ function App() {
         widgets={deckWidgets}
         width={mapWidth}
         height={mapHeight}
-        // @ts-expect-error
+        // @ts-expect-error doesn't see that GeoArrowPickingInfo extends PickingInfo
         getTooltip={showTooltip && getTooltip}
         pickingRadius={pickingRadius}
         useDevicePixels={isDefined(useDevicePixels) ? useDevicePixels : true}

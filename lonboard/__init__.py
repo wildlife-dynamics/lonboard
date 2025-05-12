@@ -1,13 +1,23 @@
-"""
-Python library for fast, interactive geospatial vector data visualization in Jupyter.
-"""
+"""Python library for fast, interactive geospatial vector data visualization in Jupyter."""
 
-from . import colormap, controls, layer_extension, traits
+from . import colormap, controls, experimental, layer_extension, traits
+from ._deck_widget import (
+    BaseDeckWidget,
+    CompassWidget,
+    FullscreenWidget,
+    LegendWidget,
+    NorthArrowWidget,
+    SaveImageWidget,
+    ScaleWidget,
+    TitleWidget,
+    ZoomWidget,
+)
 from ._layer import (
     BaseArrowLayer,
     BaseLayer,
     BitmapLayer,
     BitmapTileLayer,
+    ColumnLayer,
     HeatmapLayer,
     PathLayer,
     PointCloudLayer,
@@ -18,14 +28,3 @@ from ._layer import (
 from ._map import Map
 from ._version import __version__
 from ._viz import viz
-from ._deck_widget import (
-    BaseDeckWidget,
-    FullscreenWidget,
-    ZoomWidget,
-    CompassWidget,
-    TitleWidget,
-    NorthArrowWidget,
-    LegendWidget,
-    ScaleWidget,
-    SaveImageWidget,
-)

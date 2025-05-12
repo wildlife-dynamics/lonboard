@@ -4,20 +4,28 @@ Refer to https://traitlets.readthedocs.io/en/stable/defining_traits.html for
 documentation on how to define new traitlet types.
 """
 
+# ruff: noqa: ARG002, C901, D102, D107, PLR0912, SLF001, UP031
+
 from __future__ import annotations
 
+import sys
 import warnings
-from typing import Any, List, Optional, Set, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, NoReturn, Optional, TypeVar
+from typing import cast as type_cast
 from urllib.parse import urlparse
 
-import matplotlib as mpl
 import numpy as np
-import pyarrow as pa
 import traitlets
-from traitlets import TraitError
-from traitlets.traitlets import TraitType
+from arro3.core import (
+    Array,
+    ChunkedArray,
+    DataType,
+    Field,
+    Table,
+    fixed_size_list_array,
+)
+from traitlets import TraitError, Undefined
 from traitlets.utils.descriptions import class_of, describe
-from typing_extensions import Self
 
 from lonboard._serialization import (
     ACCESSOR_SERIALIZATION,
@@ -25,7 +33,17 @@ from lonboard._serialization import (
     serialize_view_state,
 )
 from lonboard._utils import get_geometry_column_index
+from lonboard._vendor.matplotlib.colors import _to_rgba_no_colorcycle
 from lonboard.models import ViewState
+
+if TYPE_CHECKING:
+    import pandas as pd
+    from traitlets import HasTraits
+    from traitlets.traitlets import TraitType
+    from traitlets.utils.sentinel import Sentinel
+
+    from lonboard._constants import EXTENSION_NAME
+    from lonboard._layer import BaseArrowLayer
 
 DEFAULT_INITIAL_VIEW_STATE = {
     "latitude": 10,
@@ -36,12 +54,22 @@ DEFAULT_INITIAL_VIEW_STATE = {
 }
 
 
-# This is a custom subclass of traitlets.TraitType because its `error` method ignores
-# the `info` passed in. See https://github.com/developmentseed/lonboard/issues/71 and
-# https://github.com/ipython/traitlets/pull/884
 class FixedErrorTraitType(traitlets.TraitType):
-    def error(self, obj: Self, value, error=None, info=None):
-        """Raise a TraitError
+    """A custom subclass of traitlets.TraitType.
+
+    This is because its `error` method ignores the `info` passed in. See
+    https://github.com/developmentseed/lonboard/issues/71 and
+    https://github.com/ipython/traitlets/pull/884.
+    """
+
+    def error(
+        self,
+        obj: HasTraits | None,
+        value: Any,
+        error: Exception | None = None,
+        info: str | None = None,
+    ) -> NoReturn:
+        """Raise a TraitError.
 
         Parameters
         ----------
@@ -65,6 +93,7 @@ class FixedErrorTraitType(traitlets.TraitType):
             A description of the expected value. By
             default this is infered from this trait's
             ``info`` method.
+
         """
         if error is not None:
             # handle nested error
@@ -85,8 +114,7 @@ class FixedErrorTraitType(traitlets.TraitType):
                     )
                 else:
                     error.args = (
-                        "The '{}' trait contains {} which "
-                        "expected {}, not {}.".format(
+                        "The '{}' trait contains {} which expected {}, not {}.".format(
                             self.name,
                             chain,
                             error.args[1],
@@ -94,55 +122,52 @@ class FixedErrorTraitType(traitlets.TraitType):
                         ),
                     )
             raise error
+        # this trait caused an error
+        if self.name is None:
+            # this is not the root trait
+            raise TraitError(value, info or self.info(), self)
+        # this is the root trait
+        if obj is not None:
+            e = "The '{}' trait of {} instance expected {}, not {}.".format(
+                self.name,
+                class_of(obj),
+                # CHANGED:
+                # Use info if provided
+                info or self.info(),
+                describe("the", value),
+            )
         else:
-            # this trait caused an error
-            if self.name is None:
-                # this is not the root trait
-                raise TraitError(value, info or self.info(), self)
-            else:
-                # this is the root trait
-                if obj is not None:
-                    e = "The '{}' trait of {} instance expected {}, not {}.".format(
-                        self.name,
-                        class_of(obj),
-                        # CHANGED:
-                        # Use info if provided
-                        info or self.info(),
-                        describe("the", value),
-                    )
-                else:
-                    e = "The '{}' trait expected {}, not {}.".format(
-                        self.name,
-                        # CHANGED:
-                        # Use info if provided
-                        info or self.info(),
-                        describe("the", value),
-                    )
-                raise TraitError(e)
+            e = "The '{}' trait expected {}, not {}.".format(
+                self.name,
+                # CHANGED:
+                # Use info if provided
+                info or self.info(),
+                describe("the", value),
+            )
+        raise TraitError(e)
 
 
-class PyarrowTableTrait(FixedErrorTraitType):
-    """A trait to validate input for a geospatial Arrow-backed table
+class ArrowTableTrait(FixedErrorTraitType):
+    """A trait to validate input for a geospatial Arrow-backed table.
 
     Allowed input includes:
 
     - A pyarrow [`Table`][pyarrow.Table] or containing a geometry column with [GeoArrow metadata](https://geoarrow.org/extension-types).
     - Any GeoArrow table from a library that implements the [Arrow PyCapsule
       Interface](https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html).
-      This includes the
-      [`GeoTable`](https://geoarrow.github.io/geoarrow-rs/python/latest/api/core/table/#geoarrow.rust.core.GeoTable)
-      class from
-      [`geoarrow-rust`](https://geoarrow.github.io/geoarrow-rs/python/latest/).
     """
 
     default_value = None
-    info_text = "a pyarrow or GeoArrow Table"
+    info_text = (
+        "a table-like Arrow object, such as a pyarrow or arro3 Table or "
+        "RecordBatchReader"
+    )
 
     def __init__(
         self: TraitType,
-        *args,
-        allowed_geometry_types: Set[bytes] | None = None,
-        allowed_dimensions: Optional[Set[int]] = None,
+        *args: Any,
+        allowed_geometry_types: set[EXTENSION_NAME] | None = None,
+        allowed_dimensions: set[int] | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -153,22 +178,28 @@ class PyarrowTableTrait(FixedErrorTraitType):
             **TABLE_SERIALIZATION,
         )
 
-    def validate(self, obj: Self, value: Any):
-        if not isinstance(value, pa.Table):
+    def validate(self, obj: BaseArrowLayer, value: Any) -> Table:
+        if not isinstance(value, Table):
             self.error(obj, value)
 
         allowed_geometry_types = self.metadata.get("allowed_geometry_types")
-        allowed_geometry_types = cast(Optional[Set[bytes]], allowed_geometry_types)
+        allowed_geometry_types = type_cast(
+            "Optional[set[bytes]]",
+            allowed_geometry_types,
+        )
 
         allowed_dimensions = self.metadata.get("allowed_dimensions")
-        allowed_dimensions = cast(Optional[Set[int]], allowed_dimensions)
+        allowed_dimensions = type_cast("Optional[set[int]]", allowed_dimensions)
 
         geom_col_idx = get_geometry_column_index(value.schema)
+
+        if geom_col_idx is None:
+            return self.error(obj, value, info="geometry column in table")
 
         # No restriction on the allowed geometry types in this table
         if allowed_geometry_types:
             geometry_extension_type = value.schema.field(geom_col_idx).metadata.get(
-                b"ARROW:extension:name"
+                b"ARROW:extension:name",
             )
 
             if (
@@ -184,15 +215,17 @@ class PyarrowTableTrait(FixedErrorTraitType):
 
         if allowed_dimensions:
             typ = value.column(geom_col_idx).type
-            while isinstance(typ, pa.ListType):
-                typ = typ.value_type
+            while DataType.is_list(typ):
+                value_type = typ.value_type
+                assert value_type is not None
+                typ = value_type
 
-            assert isinstance(typ, pa.FixedSizeListType)
+            assert DataType.is_fixed_size_list(typ)
             if typ.list_size not in allowed_dimensions:
                 msg = " or ".join(map(str, list(allowed_dimensions)))
                 self.error(obj, value, info=f"{msg}-dimensional points")
 
-        return value
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class ColorAccessor(FixedErrorTraitType):
@@ -203,7 +236,9 @@ class ColorAccessor(FixedErrorTraitType):
     - A `list` or `tuple` with three or four integers, ranging between 0 and 255
       (inclusive). This will be used as the color for all objects.
     - A `str` representing a hex color or "well known" color interpretable by
-      [matplotlib.colors.to_rgba][matplotlib.colors.to_rgba].
+      [matplotlib.colors.to_rgba][matplotlib.colors.to_rgba]. See also matplotlib's
+      [list of named
+      colors](https://matplotlib.org/stable/gallery/color/named_colors.html#base-colors).
     - A numpy `ndarray` with two dimensions and data type [`np.uint8`][numpy.uint8]. The
       size of the second dimension must be `3` or `4`, and will correspond to either RGB
       or RGBA colors.
@@ -228,15 +263,30 @@ class ColorAccessor(FixedErrorTraitType):
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True, **ACCESSOR_SERIALIZATION)
 
-    def validate(
-        self, obj, value
-    ) -> Union[Tuple[int, ...], List[int], pa.ChunkedArray, pa.FixedSizeListArray]:
+    def _numpy_to_arrow(self, obj: BaseArrowLayer, value: np.ndarray) -> ChunkedArray:
+        if not np.issubdtype(value.dtype, np.uint8):
+            self.error(obj, value, info="Color array must be uint8 type.")
+
+        if value.ndim != 2:
+            self.error(obj, value, info="Color array must have 2 dimensions.")
+
+        list_size = value.shape[1]
+        if list_size not in (3, 4):
+            self.error(
+                obj,
+                value,
+                info="Color array must have 3 or 4 as its second dimension.",
+            )
+
+        return ChunkedArray([fixed_size_list_array(value.ravel("C"), list_size)])
+
+    def validate(self, obj: BaseArrowLayer, value: Any) -> tuple | list | ChunkedArray:
         if isinstance(value, (tuple, list)):
             if len(value) < 3 or len(value) > 4:
                 self.error(obj, value, info="3 or 4 values if passed a tuple or list")
@@ -257,71 +307,50 @@ class ColorAccessor(FixedErrorTraitType):
 
             return value
 
-        if isinstance(value, np.ndarray):
-            if not np.issubdtype(value.dtype, np.uint8):
-                self.error(obj, value, info="Color array must be uint8 type.")
-
-            if value.ndim != 2:
-                self.error(obj, value, info="Color array must have 2 dimensions.")
-
-            list_size = value.shape[1]
-            if list_size not in (3, 4):
-                self.error(
-                    obj,
-                    value,
-                    info="Color array must have 3 or 4 as its second dimension.",
-                )
-
-            return pa.FixedSizeListArray.from_arrays(value.ravel("C"), list_size)
-
-        # Check for Arrow PyCapsule Interface
-        # https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html
-        # TODO: with pyarrow v16 also import chunked array from stream
-        if not isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if hasattr(value, "__arrow_c_array__"):
-                value = pa.array(value)
-
-        if isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if not pa.types.is_fixed_size_list(value.type):
-                self.error(
-                    obj, value, info="Color pyarrow array must be a FixedSizeList."
-                )
-
-            if value.type.list_size not in (3, 4):
-                self.error(
-                    obj,
-                    value,
-                    info=(
-                        "Color pyarrow array must have a FixedSizeList inner size of "
-                        "3 or 4."
-                    ),
-                )
-
-            if not pa.types.is_uint8(value.type.value_type):
-                self.error(
-                    obj, value, info="Color pyarrow array must have a uint8 child."
-                )
-
-            return value
-
         if isinstance(value, str):
             try:
-                c = mpl.colors.to_rgba(value)  # type: ignore
+                c = _to_rgba_no_colorcycle(value)  # type: ignore
             except ValueError:
-                self.error(
+                return self.error(
                     obj,
                     value,
                     info=(
-                        "Color string must be a hex string interpretable by "
-                        "matplotlib.colors.to_rgba."
+                        "Color string must be a named color or hex string interpretable"
+                        " by matplotlib.colors.to_rgba."
                     ),
                 )
-                return
 
             return tuple(map(int, (np.array(c) * 255).astype(np.uint8)))
 
-        self.error(obj, value)
-        assert False
+        if isinstance(value, np.ndarray):
+            value = self._numpy_to_arrow(obj, value)
+        elif hasattr(value, "__arrow_c_array__"):
+            value = ChunkedArray([Array.from_arrow(value)])
+        elif hasattr(value, "__arrow_c_stream__"):
+            value = ChunkedArray.from_arrow(value)
+        else:
+            self.error(obj, value)
+
+        assert isinstance(value, ChunkedArray)
+
+        if not DataType.is_fixed_size_list(value.type):
+            self.error(obj, value, info="Color Arrow array must be a FixedSizeList.")
+
+        if value.type.list_size not in (3, 4):
+            self.error(
+                obj,
+                value,
+                info=(
+                    "Color Arrow array must have a FixedSizeList inner size of 3 or 4."
+                ),
+            )
+
+        value_type = value.type.value_type
+        assert value_type is not None
+        if not DataType.is_uint8(value_type):
+            self.error(obj, value, info="Color Arrow array must have a uint8 child.")
+
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class FloatAccessor(FixedErrorTraitType):
@@ -348,19 +377,30 @@ class FloatAccessor(FixedErrorTraitType):
 
     default_value = float(0)
     info_text = (
-        "a float value or numpy ndarray or pyarrow array representing an array"
-        " of floats"
+        "a float value or numpy ndarray or Arrow array representing an array of floats"
     )
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True, **ACCESSOR_SERIALIZATION)
 
-    def validate(self, obj, value) -> Union[float, pa.ChunkedArray, pa.DoubleArray]:
+    def _pandas_to_numpy(self, obj: BaseArrowLayer, value: pd.Series) -> np.ndarray:
+        """Cast pandas Series to numpy ndarray."""
+        return np.asarray(value)
+
+    def _numpy_to_arrow(self, obj: BaseArrowLayer, value: np.ndarray) -> ChunkedArray:
+        if not np.issubdtype(value.dtype, np.number):
+            self.error(obj, value, info="numeric dtype")
+
+        # TODO: should we always be casting to float32? Should it be
+        # possible/allowed to pass in ~int8 or a data type smaller than float32?
+        return ChunkedArray([value.astype(np.float32)])
+
+    def validate(self, obj: BaseArrowLayer, value: Any) -> float | ChunkedArray:
         if isinstance(value, (int, float)):
             return float(value)
 
@@ -369,36 +409,28 @@ class FloatAccessor(FixedErrorTraitType):
             value.__class__.__module__.startswith("pandas")
             and value.__class__.__name__ == "Series"
         ):
-            # Cast pandas Series to numpy ndarray
-            value = np.asarray(value)
+            value = self._pandas_to_numpy(obj, value)
 
         if isinstance(value, np.ndarray):
-            if not np.issubdtype(value.dtype, np.number):
-                self.error(obj, value, info="numeric dtype")
+            value = self._numpy_to_arrow(obj, value)
+        elif hasattr(value, "__arrow_c_array__"):
+            value = ChunkedArray([Array.from_arrow(value)])
+        elif hasattr(value, "__arrow_c_stream__"):
+            value = ChunkedArray.from_arrow(value)
+        else:
+            self.error(obj, value)
 
-            # TODO: should we always be casting to float32? Should it be
-            # possible/allowed to pass in ~int8 or a data type smaller than float32?
-            return pa.array(value.astype(np.float32))
+        assert isinstance(value, ChunkedArray)
 
-        # Check for Arrow PyCapsule Interface
-        # https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html
-        # TODO: with pyarrow v16 also import chunked array from stream
-        if not isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if hasattr(value, "__arrow_c_array__"):
-                value = pa.array(value)
+        if not DataType.is_numeric(value.type):
+            self.error(
+                obj,
+                value,
+                info="Float Arrow array must be a numeric type.",
+            )
 
-        if isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if not pa.types.is_floating(value.type):
-                self.error(
-                    obj,
-                    value,
-                    info="Float pyarrow array must be a floating point type.",
-                )
-
-            return value.cast(pa.float32())
-
-        self.error(obj, value)
-        assert False
+        value = value.cast(DataType.float32())
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class TextAccessor(FixedErrorTraitType):
@@ -418,45 +450,70 @@ class TextAccessor(FixedErrorTraitType):
 
     default_value = ""
     info_text = (
-        "a string value or numpy ndarray or pandas Series or pyarrow array representing"
+        "a string value or numpy ndarray or pandas Series or Arrow array representing"
         " an array of strings"
     )
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True, **ACCESSOR_SERIALIZATION)
 
-    def validate(self, obj, value) -> Union[float, pa.ChunkedArray, pa.DoubleArray]:
+    def pandas_to_arrow(self, obj: BaseArrowLayer, value: pd.Series) -> ChunkedArray:
+        """Cast pandas Series to arrow array."""
+        try:
+            import pyarrow as pa
+        except ImportError as e:
+            raise ImportError(
+                "pyarrow is a required dependency when passing in a pandas series",
+            ) from e
+
+        return ChunkedArray([pa.array(value)])
+
+    def _numpy_to_arrow(self, obj: BaseArrowLayer, value: np.ndarray) -> ChunkedArray:
+        try:
+            import pyarrow as pa
+        except ImportError as e:
+            raise ImportError(
+                "pyarrow is a required dependency when passing in a numpy string array",
+            ) from e
+
+        return ChunkedArray([pa.StringArray.from_pandas(value)])
+
+    def validate(self, obj: BaseArrowLayer, value: Any) -> float | str | ChunkedArray:
         if isinstance(value, str):
             return value
 
-        # pandas Series
         if (
             value.__class__.__module__.startswith("pandas")
             and value.__class__.__name__ == "Series"
         ):
-            # Cast pandas Series to pyarrow array
-            value = pa.array(value)
+            value = self.pandas_to_arrow(obj, value)
+        elif isinstance(value, np.ndarray):
+            value = self._numpy_to_arrow(obj, value)
+        elif hasattr(value, "__arrow_c_array__"):
+            value = ChunkedArray([Array.from_arrow(value)])
+        elif hasattr(value, "__arrow_c_stream__"):
+            value = ChunkedArray.from_arrow(value)
+        else:
+            self.error(obj, value)
 
-        if isinstance(value, np.ndarray):
-            value = pa.StringArray.from_pandas(value)
+        assert isinstance(value, ChunkedArray)
 
-        if isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if not pa.types.is_string(value.type):
-                self.error(
-                    obj,
-                    value,
-                    info="String pyarrow array must be a string type.",
-                )
+        if DataType.is_large_string(value.type):
+            value = value.cast(DataType.string())
 
-            return value
+        if not DataType.is_string(value.type):
+            self.error(
+                obj,
+                value,
+                info="String Arrow array must be a string type.",
+            )
 
-        self.error(obj, value)
-        assert False
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class PointAccessor(FixedErrorTraitType):
@@ -474,81 +531,75 @@ class PointAccessor(FixedErrorTraitType):
     """
 
     default_value = (0, 0, 0)
-    info_text = (
-        "a tuple or list representing an RGB(A) color or numpy ndarray or "
-        "pyarrow FixedSizeList representing an array of RGB(A) colors"
-    )
+    info_text = "a numpy ndarray or arrow FixedSizeList representing a point array"
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True, **ACCESSOR_SERIALIZATION)
 
+    def _numpy_to_arrow(self, obj: BaseArrowLayer, value: np.ndarray) -> ChunkedArray:
+        if value.ndim != 2:
+            self.error(obj, value, info="Point array to have 2 dimensions")
+
+        list_size = value.shape[1]
+        if list_size not in (2, 3):
+            self.error(
+                obj,
+                value,
+                info="Point array to have 2 or 3 as its second dimension",
+            )
+
+        assert np.issubdtype(value.dtype, np.float64)
+        array = fixed_size_list_array(value.ravel("C"), list_size)
+        return ChunkedArray([array])
+
     def validate(
-        self, obj, value
-    ) -> Union[Tuple[int, ...], List[int], pa.ChunkedArray, pa.FixedSizeListArray]:
+        self,
+        obj: BaseArrowLayer,
+        value: Any,
+    ) -> tuple[int, ...] | list[int] | ChunkedArray:
         if isinstance(value, np.ndarray):
-            if value.ndim != 2:
-                self.error(obj, value, info="Point array to have 2 dimensions")
+            value = self._numpy_to_arrow(obj, value)
+        elif hasattr(value, "__arrow_c_array__"):
+            value = ChunkedArray([Array.from_arrow(value)])
+        elif hasattr(value, "__arrow_c_stream__"):
+            value = ChunkedArray.from_arrow(value)
+        else:
+            self.error(obj, value)
 
-            list_size = value.shape[1]
-            if list_size not in (2, 3):
-                self.error(
-                    obj,
-                    value,
-                    info="Point array to have 2 or 3 as its second dimension",
-                )
+        assert isinstance(value, ChunkedArray)
 
-            return pa.FixedSizeListArray.from_arrays(value.ravel("C"), list_size)
+        if not DataType.is_fixed_size_list(value.type):
+            self.error(obj, value, info="Point arrow array to be a FixedSizeList")
 
-        if isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if not pa.types.is_fixed_size_list(value.type):
-                self.error(obj, value, info="Point pyarrow array to be a FixedSizeList")
+        if value.type.list_size not in (2, 3):
+            self.error(
+                obj,
+                value,
+                info=(
+                    "point arrow array to be a FixedSizeList with list size of 2 or 3"
+                ),
+            )
 
-            if value.type.list_size not in (2, 3):
-                self.error(
-                    obj,
-                    value,
-                    info=(
-                        "Color pyarrow array to be a FixedSizeList with list size of "
-                        "2 or 3"
-                    ),
-                )
+        value_type = value.type.value_type
+        assert value_type is not None
+        if not DataType.is_float64(value_type):
+            self.error(
+                obj,
+                value,
+                info="Point arrow array to have a float64 point child",
+            )
 
-            if not pa.types.is_floating(value.type.value_type):
-                self.error(
-                    obj,
-                    value,
-                    info="Point pyarrow array to have a floating point child",
-                )
-
-            return value
-
-        if isinstance(value, str):
-            try:
-                c = mpl.colors.to_rgba(value)  # type: ignore
-            except ValueError:
-                self.error(
-                    obj,
-                    value,
-                    info=(
-                        "Color string to be a hex string interpretable by "
-                        "matplotlib.colors.to_rgba"
-                    ),
-                )
-                return
-
-            return tuple(map(int, (np.array(c) * 255).astype(np.uint8)))
-
-        self.error(obj, value)
-        assert False
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class FilterValueAccessor(FixedErrorTraitType):
-    """
+    """Validate input for `get_filter_value`.
+
     A trait to validate input for the `get_filter_value` accessor added by the
     [`DataFilterExtension`][lonboard.layer_extension.DataFilterExtension], which can
     have between 1 and 4 float values per row.
@@ -597,26 +648,79 @@ class FilterValueAccessor(FixedErrorTraitType):
 
     default_value = float(0)
     info_text = (
-        "a float value or numpy ndarray or pyarrow array representing an array"
-        " of floats"
+        "a float value or numpy ndarray or Arrow array representing an array of floats"
     )
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True, **ACCESSOR_SERIALIZATION)
 
-    def validate(self, obj, value) -> Union[float, pa.ChunkedArray, pa.DoubleArray]:
+    def _pandas_to_numpy(
+        self,
+        obj: BaseArrowLayer,
+        value: Any,
+        filter_size: int,
+    ) -> np.ndarray:
+        # Assert that filter_size == 1 for a pandas series.
+        # Pandas series can technically contain Python list objects inside them, but
+        # for simplicity we disallow that.
+        if filter_size != 1:
+            self.error(obj, value, info="filter_size==1 with pandas Series")
+
+        # Cast pandas Series to numpy ndarray
+        return np.asarray(value)
+
+    def _numpy_to_arrow(
+        self,
+        obj: BaseArrowLayer,
+        value: Any,
+        filter_size: int,
+    ) -> ChunkedArray:
+        if not np.issubdtype(value.dtype, np.number):
+            self.error(obj, value, info="numeric dtype")
+
+        # Cast to float32
+        value = value.astype(np.float32)
+
+        if len(value.shape) == 1:
+            if filter_size != 1:
+                self.error(obj, value, info="filter_size==1 with 1-D numpy array")
+
+            return ChunkedArray([value])
+
+        if len(value.shape) != 2:
+            self.error(obj, value, info="1-D or 2-D numpy array")
+
+        if value.shape[1] != filter_size:
+            self.error(
+                obj,
+                value,
+                info=(
+                    f"filter_size ({filter_size}) to match 2nd dimension of numpy array"
+                ),
+            )
+
+        array = fixed_size_list_array(value.ravel("C"), filter_size)
+        return ChunkedArray([array])
+
+    def validate(
+        self,
+        obj: BaseArrowLayer,
+        value: Any,
+    ) -> float | tuple | list | ChunkedArray:
         # Find the data filter extension in the attributes of the parent object so we
         # can validate against the filter size.
         data_filter_extension = [
-            ext for ext in obj.extensions if ext._extension_type == "data-filter"
+            ext
+            for ext in obj.extensions
+            if ext._extension_type == "data-filter"  # type: ignore
         ]
         assert len(data_filter_extension) == 1
-        filter_size = data_filter_extension[0].filter_size
+        filter_size = data_filter_extension[0].filter_size  # type: ignore
 
         if isinstance(value, (int, float)):
             if filter_size != 1:
@@ -646,98 +750,67 @@ class FilterValueAccessor(FixedErrorTraitType):
             value.__class__.__module__.startswith("pandas")
             and value.__class__.__name__ == "Series"
         ):
-            # Assert that filter_size == 1 for a pandas series.
-            # Pandas series can technically contain Python list objects inside them, but
-            # for simplicity we disallow that.
-            if filter_size != 1:
-                self.error(obj, value, info="filter_size==1 with pandas Series")
-
-            # Cast pandas Series to numpy ndarray
-            value = np.asarray(value)
+            value = self._pandas_to_numpy(obj, value, filter_size)
 
         if isinstance(value, np.ndarray):
-            if not np.issubdtype(value.dtype, np.number):
-                self.error(obj, value, info="numeric dtype")
+            value = self._numpy_to_arrow(obj, value, filter_size)
+        elif hasattr(value, "__arrow_c_array__"):
+            value = ChunkedArray([Array.from_arrow(value)])
+        elif hasattr(value, "__arrow_c_stream__"):
+            value = ChunkedArray.from_arrow(value)
+        else:
+            self.error(obj, value)
 
-            # Cast to float32
-            value = value.astype(np.float32)
+        assert isinstance(value, ChunkedArray)
 
-            if len(value.shape) == 1:
-                if filter_size != 1:
-                    self.error(obj, value, info="filter_size==1 with 1-D numpy array")
-
-                return pa.array(value)
-
-            if len(value.shape) != 2:
-                self.error(obj, value, info="1-D or 2-D numpy array")
-
-            if value.shape[1] != filter_size:
+        # Allowed inputs are either a FixedSizeListArray or numeric array.
+        # If not a fixed size list array, check for floating and cast to float32
+        if not DataType.is_fixed_size_list(value.type):
+            if filter_size != 1:
                 self.error(
                     obj,
                     value,
-                    info=(
-                        f"filter_size ({filter_size}) to match 2nd dimension of "
-                        "numpy array"
-                    ),
+                    info="filter_size==1 with non-FixedSizeList type arrow array",
                 )
 
-            return pa.FixedSizeListArray.from_arrays(value.ravel("C"), filter_size)
-
-        # Check for Arrow PyCapsule Interface
-        # https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html
-        # TODO: with pyarrow v16 also import chunked array from stream
-        if not isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if hasattr(value, "__arrow_c_array__"):
-                value = pa.array(value)
-
-        if isinstance(value, (pa.ChunkedArray, pa.Array)):
-            # Allowed inputs are either a FixedSizeListArray or numeric array.
-            # If not a fixed size list array, check for floating and cast to float32
-            if not pa.types.is_fixed_size_list(value.type):
-                if filter_size != 1:
-                    self.error(
-                        obj,
-                        value,
-                        info="filter_size==1 with non-FixedSizeList type arrow array",
-                    )
-
-                if not pa.types.is_floating(value.type):
-                    self.error(
-                        obj,
-                        value,
-                        info="arrow array to be a floating point type",
-                    )
-
-                return value.cast(pa.float32())
-
-            # We have a FixedSizeListArray
-            if filter_size != value.type.list_size:
+            if not DataType.is_floating(value.type):
                 self.error(
                     obj,
                     value,
-                    info=(
-                        f"filter_size ({filter_size}) to match list size of "
-                        "FixedSizeList arrow array"
-                    ),
+                    info="arrow array to be a floating point type",
                 )
 
-            if not pa.types.is_floating(value.type.value_type):
-                self.error(
-                    obj,
-                    value,
-                    info="arrow array to have floating point child type",
-                )
+            return value.cast(DataType.float32())
 
-            # Cast values to float32
-            return value.cast(pa.list_(pa.float32(), value.type.list_size))
+        # We have a FixedSizeListArray
+        if filter_size != value.type.list_size:
+            self.error(
+                obj,
+                value,
+                info=(
+                    f"filter_size ({filter_size}) to match list size of "
+                    "FixedSizeList arrow array"
+                ),
+            )
 
-        self.error(obj, value)
-        assert False
+        value_type = value.type.value_type
+        assert value_type is not None
+        if not DataType.is_floating(value_type):
+            self.error(
+                obj,
+                value,
+                info="arrow array to have floating point child type",
+            )
+
+        # Cast values to float32
+        value = value.cast(
+            DataType.list(Field("", DataType.float32()), value.type.list_size),
+        )
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class NormalAccessor(FixedErrorTraitType):
-    """
-    A representation of a deck.gl "normal" accessor
+    """A representation of a deck.gl "normal" accessor.
 
     This is primarily used in the [lonboard.PointCloudLayer].
 
@@ -762,19 +835,40 @@ class NormalAccessor(FixedErrorTraitType):
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True, **ACCESSOR_SERIALIZATION)
 
+    def _numpy_to_arrow(self, obj: BaseArrowLayer, value: np.ndarray) -> ChunkedArray:
+        if not np.issubdtype(value.dtype, np.number):
+            self.error(obj, value, info="normal array to have numeric type")
+
+        if value.ndim != 2 or value.shape[1] != 3:
+            self.error(obj, value, info="normal array to be 2D with shape (N, 3)")
+
+        if not np.issubdtype(value.dtype, np.float32):
+            warnings.warn(
+                """Warning: Numpy array should be float32 type.
+                Converting to float32 point Arrow array""",
+            )
+            value = value.astype(np.float32)
+
+        array = fixed_size_list_array(value.ravel("C"), 3)
+        return ChunkedArray([array])
+
     def validate(
-        self, obj, value
-    ) -> Union[Tuple[int, ...], List[int], pa.ChunkedArray, pa.FixedSizeListArray]:
+        self,
+        obj: BaseArrowLayer,
+        value: Any,
+    ) -> tuple[int, ...] | list[int] | ChunkedArray:
         if isinstance(value, (tuple, list)):
             if len(value) != 3:
                 self.error(
-                    obj, value, info="normal scalar to have length 3, (nx, ny, nz)"
+                    obj,
+                    value,
+                    info="normal scalar to have length 3, (nx, ny, nz)",
                 )
 
             if not all(isinstance(item, (int, float)) for item in value):
@@ -787,68 +881,55 @@ class NormalAccessor(FixedErrorTraitType):
             return value
 
         if isinstance(value, np.ndarray):
-            if not np.issubdtype(value.dtype, np.number):
-                self.error(obj, value, info="normal array to have numeric type")
+            value = self._numpy_to_arrow(obj, value)
+        elif hasattr(value, "__arrow_c_array__"):
+            value = ChunkedArray([Array.from_arrow(value)])
+        elif hasattr(value, "__arrow_c_stream__"):
+            value = ChunkedArray.from_arrow(value)
+        else:
+            self.error(obj, value)
 
-            if value.ndim != 2 or value.shape[1] != 3:
-                self.error(obj, value, info="normal array to be 2D with shape (N, 3)")
+        assert isinstance(value, ChunkedArray)
 
-            if not np.issubdtype(value.dtype, np.float32):
-                warnings.warn(
-                    """Warning: Numpy array should be float32 type.
-                    Converting to float32 point pyarrow array"""
-                )
-                value = value.astype(np.float32)
+        if not DataType.is_fixed_size_list(value.type):
+            self.error(obj, value, info="normal Arrow array to be a FixedSizeList.")
 
-            return pa.FixedSizeListArray.from_arrays(value.ravel("C"), 3)
+        if value.type.list_size != 3:
+            self.error(
+                obj,
+                value,
+                info=("normal Arrow array to have an inner size of 3."),
+            )
 
-        # Check for Arrow PyCapsule Interface
-        # https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html
-        # TODO: with pyarrow v16 also import chunked array from stream
-        if not isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if hasattr(value, "__arrow_c_array__"):
-                value = pa.array(value)
+        value_type = value.type.value_type
+        assert value_type is not None
+        if not DataType.is_floating(value_type):
+            self.error(
+                obj,
+                value,
+                info="Arrow array to be floating point type",
+            )
 
-        if isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if not pa.types.is_fixed_size_list(value.type):
-                self.error(
-                    obj, value, info="normal pyarrow array to be a FixedSizeList."
-                )
-
-            if value.type.list_size != 3:
-                self.error(
-                    obj,
-                    value,
-                    info=("normal pyarrow array to have an inner size of 3."),
-                )
-
-            if not pa.types.is_floating(value.type.value_type):
-                self.error(
-                    obj,
-                    value,
-                    info="pyarrow array to be floating point type",
-                )
-
-            return value.cast(pa.list_(pa.float32(), 3))
-
-        self.error(obj, value)
-        assert False
+        value = value.cast(DataType.list(Field("", DataType.float32()), 3))
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class ViewStateTrait(FixedErrorTraitType):
+    """Trait to validate view state input."""
+
     allow_none = True
     default_value = DEFAULT_INITIAL_VIEW_STATE
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
 
         self.tag(sync=True, to_json=serialize_view_state)
 
-    def validate(self, obj, value):
+    def validate(self, obj: Any, value: Any) -> None | ViewState:
         if value is None:
             return None
 
@@ -891,15 +972,39 @@ class DashArrayAccessor(FixedErrorTraitType):
 
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True, **ACCESSOR_SERIALIZATION)
 
+    def _numpy_to_arrow(self, obj: BaseArrowLayer, value: np.ndarray) -> ChunkedArray:
+        if not np.issubdtype(value.dtype, np.number):
+            self.error(obj, value, info="NumPy array must be uint8 type.")
+
+        if value.ndim != 2:
+            self.error(obj, value, info="NumPy array must have 2 dimensions.")
+
+        list_size = value.shape[1]
+        if list_size != 2:
+            self.error(
+                obj,
+                value,
+                info="NumPy array must have 2 as its second dimension.",
+            )
+
+        # Cast float64 to float32; leave other data types the same
+        if np.issubdtype(value.dtype, np.float64):
+            value = value.astype(np.float32)
+
+        array = fixed_size_list_array(value.ravel("C"), list_size)
+        return ChunkedArray([array])
+
     def validate(
-        self, obj, value
-    ) -> Union[Tuple[int, ...], List[int], pa.ChunkedArray, pa.FixedSizeListArray]:
+        self,
+        obj: BaseArrowLayer,
+        value: Any,
+    ) -> tuple[int, ...] | list[int] | ChunkedArray:
         if isinstance(value, (tuple, list)):
             if len(value) != 2:
                 self.error(obj, value, info="2 value list only")
@@ -914,81 +1019,144 @@ class DashArrayAccessor(FixedErrorTraitType):
             return value
 
         if isinstance(value, np.ndarray):
-            if not np.issubdtype(value.dtype, np.number):
-                self.error(obj, value, info="NumPy array must be uint8 type.")
+            value = self._numpy_to_arrow(obj, value)
+        elif hasattr(value, "__arrow_c_array__"):
+            value = ChunkedArray([Array.from_arrow(value)])
+        elif hasattr(value, "__arrow_c_stream__"):
+            value = ChunkedArray.from_arrow(value)
+        else:
+            self.error(obj, value)
 
-            if value.ndim != 2:
-                self.error(obj, value, info="NumPy array must have 2 dimensions.")
+        assert isinstance(value, ChunkedArray)
 
-            list_size = value.shape[1]
-            if list_size != 2:
-                self.error(
-                    obj,
-                    value,
-                    info="NumPy array must have 2 as its second dimension.",
-                )
+        if not DataType.is_fixed_size_list(value.type):
+            self.error(obj, value, info="Arrow array must be a FixedSizeList.")
 
-            # Cast float64 to float32; leave other data types the same
-            if np.issubdtype(value.dtype, np.float64):
-                value = value.astype(np.float32)
+        if value.type.list_size != 2:
+            self.error(
+                obj,
+                value,
+                info="Arrow array must have a FixedSizeList inner size of 2.",
+            )
 
-            return pa.FixedSizeListArray.from_arrays(value.ravel("C"), list_size)
+        value_type = value.type.value_type
+        assert value_type is not None
+        if not (
+            DataType.is_integer(value_type)
+            or DataType.is_signed_integer(value_type)
+            or DataType.is_floating(value_type)
+        ):
+            self.error(obj, value, info="Arrow array to have a numeric type child.")
 
-        # Check for Arrow PyCapsule Interface
-        # https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html
-        # TODO: with pyarrow v16 also import chunked array from stream
-        if not isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if hasattr(value, "__arrow_c_array__"):
-                value = pa.array(value)
+        # Cast float64 to float32; leave other data types the same
+        if DataType.is_float64(value_type):
+            value = value.cast(DataType.list(DataType.float32(), value.type.list_size))
 
-        if isinstance(value, (pa.ChunkedArray, pa.Array)):
-            if not pa.types.is_fixed_size_list(value.type):
-                self.error(obj, value, info="Pyarrow array must be a FixedSizeList.")
-
-            if value.type.list_size != 2:
-                self.error(
-                    obj,
-                    value,
-                    info="Pyarrow array must have a FixedSizeList inner size of 2.",
-                )
-
-            if not (
-                pa.types.is_integer(value.type.value_type)
-                or pa.types.is_signed_integer(value.type.value_type)
-                or pa.types.is_floating(value.type.value_type)
-            ):
-                self.error(
-                    obj, value, info="Pyarrow array to have a numeric type child."
-                )
-
-            # Cast float64 to float32; leave other data types the same
-            if pa.types.is_float64(value.type.value_type):
-                value = value.cast(pa.list_(pa.float32(), value.type.list_size))
-
-            return value
-
-        self.error(obj, value)
-        assert False
+        return value.rechunk(max_chunksize=obj._rows_per_chunk)
 
 
 class BasemapUrl(traitlets.Unicode):
+    """Validation for basemap url."""
+
     def __init__(
         self: TraitType,
-        *args,
+        *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.tag(sync=True)
 
-    def validate(self, obj: Any, value: Any) -> Any:
+    def validate(self, obj: HasTraits | None, value: Any) -> Any:
         value = super().validate(obj, value)
 
         try:
             parsed = urlparse(value)
-        except:  # noqa
+        except:  # noqa: E722
             self.error(obj, value, info="to be a URL")
 
         if not parsed.scheme.startswith("http"):
-            self.error(obj, value, info="to be a HTTP(s) URL")
+            self.error(obj, value, info="to be a HTTP(s) URL")  # noqa: RET503
         else:
             return value
+
+
+T = TypeVar("T")
+
+
+# TODO: switch to
+# class VariableLengthTuple(traitlets.Container[tuple[T, ...]])
+# When we can upgrade to traitlets 5.10 (depends on Colab upgrading)
+class VariableLengthTuple(traitlets.Container):
+    """An instance of a Python tuple with variable numbers of elements of the same type."""
+
+    klass = list  # type:ignore[assignment]
+    _cast_types: Any = (tuple,)
+
+    def __init__(
+        self,
+        trait: T | Sentinel = None,
+        default_value: tuple[T] | Sentinel | None = Undefined,
+        minlen: int = 0,
+        maxlen: int = sys.maxsize,
+        **kwargs: Any,
+    ) -> None:
+        """Create a tuple trait type.
+
+        The default value is created by doing ``list(default_value)``,
+        which creates a copy of the ``default_value``.
+
+        ``trait`` can be specified, which restricts the type of elements
+        in the container to that TraitType.
+
+        If only one arg is given and it is not a Trait, it is taken as
+        ``default_value``:
+
+        ``c = List([1, 2, 3])``
+
+        Parameters
+        ----------
+        trait : TraitType [ optional ]
+            the type for restricting the contents of the Container.
+            If unspecified, types are not checked.
+        default_value : SequenceType [ optional ]
+            The default value for the Trait.  Must be list/tuple/set, and
+            will be cast to the container type.
+        minlen : Int [ default 0 ]
+            The minimum length of the input list
+        maxlen : Int [ default sys.maxsize ]
+            The maximum length of the input list
+        kwargs:
+            passed on to traitlets.Container.
+
+        """
+        self._maxlen = maxlen
+        self._minlen = minlen
+        super().__init__(trait=trait, default_value=default_value, **kwargs)
+
+    def length_error(self, obj: Any, value: Any) -> None:
+        e = "The '%s' trait of %s instance must be of length %i <= L <= %i" % (
+            self.name,
+            class_of(obj),
+            self._minlen,
+            self._maxlen,
+        )
+        e += f", but a value of {value} was specified."
+        raise TraitError(e)
+
+    def validate_elements(self, obj: Any, value: Any) -> Any:
+        length = len(value)
+        if length < self._minlen or length > self._maxlen:
+            self.length_error(obj, value)
+
+        trait = self._trait
+
+        validated = []
+        for v in value:
+            try:
+                v = trait._validate(obj, v)  # noqa: PLW2901
+            except TraitError as error:  # noqa: PERF203
+                self.error(obj, v, error)
+            else:
+                validated.append(v)
+
+        return tuple(validated)

@@ -9,6 +9,7 @@ import {
   GeoArrowScatterplotLayer,
   GeoArrowSolidPolygonLayer,
   _GeoArrowTextLayer as GeoArrowTextLayer,
+  GeoArrowTripsLayer,
 } from "@geoarrow/deck.gl-layers";
 import type {
   GeoArrowArcLayerProps,
@@ -19,6 +20,7 @@ import type {
   GeoArrowScatterplotLayerProps,
   GeoArrowSolidPolygonLayerProps,
   _GeoArrowTextLayerProps as GeoArrowTextLayerProps,
+  GeoArrowTripsLayerProps,
 } from "@geoarrow/deck.gl-layers";
 import type { WidgetModel } from "@jupyter-widgets/base";
 import * as arrow from "apache-arrow";
@@ -268,10 +270,8 @@ export class ColumnModel extends BaseArrowLayerModel {
   protected radius: GeoArrowColumnLayerProps["radius"] | null;
   protected angle: GeoArrowColumnLayerProps["angle"] | null;
 
-  // @ts-expect-error Property 'vertices' has no initializer and is not
-  // definitely assigned in the constructor
-  // Ref https://github.com/visgl/deck.gl/pull/8453
-  protected vertices: GeoArrowColumnLayerProps["vertices"] | null;
+  // Note: not yet exposed to Python
+  // protected vertices: GeoArrowColumnLayerProps["vertices"] | null;
   protected offset: GeoArrowColumnLayerProps["offset"] | null;
   protected coverage: GeoArrowColumnLayerProps["coverage"] | null;
   protected elevationScale: GeoArrowColumnLayerProps["elevationScale"] | null;
@@ -289,7 +289,9 @@ export class ColumnModel extends BaseArrowLayerModel {
   protected lineWidthMaxPixels:
     | GeoArrowColumnLayerProps["lineWidthMaxPixels"]
     | null;
-  protected material: GeoArrowColumnLayerProps["material"] | null;
+  // Note: not yet exposed to Python
+  // protected material: GeoArrowColumnLayerProps["material"] | null;
+
   protected getPosition: GeoArrowColumnLayerProps["getPosition"] | null;
   protected getFillColor: GeoArrowColumnLayerProps["getFillColor"] | null;
   protected getLineColor: GeoArrowColumnLayerProps["getLineColor"] | null;
@@ -302,7 +304,7 @@ export class ColumnModel extends BaseArrowLayerModel {
     this.initRegularAttribute("disk_resolution", "diskResolution");
     this.initRegularAttribute("radius", "radius");
     this.initRegularAttribute("angle", "angle");
-    this.initRegularAttribute("vertices", "vertices");
+    // this.initRegularAttribute("vertices", "vertices");
     this.initRegularAttribute("offset", "offset");
     this.initRegularAttribute("coverage", "coverage");
     this.initRegularAttribute("elevation_scale", "elevationScale");
@@ -316,7 +318,7 @@ export class ColumnModel extends BaseArrowLayerModel {
     this.initRegularAttribute("line_width_scale", "lineWidthScale");
     this.initRegularAttribute("line_width_min_pixels", "lineWidthMinPixels");
     this.initRegularAttribute("line_width_max_pixels", "lineWidthMaxPixels");
-    this.initRegularAttribute("material", "material");
+    // this.initRegularAttribute("material", "material");
 
     this.initVectorizedAccessor("get_position", "getPosition");
     this.initVectorizedAccessor("get_fill_color", "getFillColor");
@@ -326,9 +328,6 @@ export class ColumnModel extends BaseArrowLayerModel {
   }
 
   layerProps(): Omit<GeoArrowColumnLayerProps, "id"> {
-    // @ts-expect-error Type 'Position[] | undefined' is not assignable to type
-    // 'Position[] | null'.
-    // Ref https://github.com/visgl/deck.gl/pull/8453
     return {
       data: this.table,
       ...(isDefined(this.diskResolution) && {
@@ -336,8 +335,8 @@ export class ColumnModel extends BaseArrowLayerModel {
       }),
       ...(isDefined(this.radius) && { radius: this.radius }),
       ...(isDefined(this.angle) && { angle: this.angle }),
-      ...(isDefined(this.vertices) &&
-        this.vertices !== undefined && { vertices: this.vertices }),
+      // ...(isDefined(this.vertices) &&
+      //   this.vertices !== undefined && { vertices: this.vertices }),
       ...(isDefined(this.offset) && { offset: this.offset }),
       ...(isDefined(this.coverage) && { coverage: this.coverage }),
       ...(isDefined(this.elevationScale) && {
@@ -361,7 +360,7 @@ export class ColumnModel extends BaseArrowLayerModel {
       ...(isDefined(this.lineWidthMaxPixels) && {
         lineWidthMaxPixels: this.lineWidthMaxPixels,
       }),
-      ...(isDefined(this.material) && { material: this.material }),
+      // ...(isDefined(this.material) && { material: this.material }),
       ...(isDefined(this.getPosition) && { getPosition: this.getPosition }),
       ...(isDefined(this.getFillColor) && { getFillColor: this.getFillColor }),
       ...(isDefined(this.getLineColor) && { getLineColor: this.getLineColor }),
@@ -715,10 +714,12 @@ export class ScatterplotModel extends BaseArrowLayerModel {
   }
 
   render(): GeoArrowScatterplotLayer {
-    return new GeoArrowScatterplotLayer({
+    const props = {
       ...this.baseLayerProps(),
       ...this.layerProps(),
-    });
+    };
+    // console.log(props);
+    return new GeoArrowScatterplotLayer(props);
   }
 }
 
@@ -905,6 +906,78 @@ export class TextModel extends BaseArrowLayerModel {
   }
 }
 
+export class TripsModel extends BaseArrowLayerModel {
+  static layerType = "trip";
+
+  protected widthUnits: GeoArrowTripsLayerProps["widthUnits"] | null;
+  protected widthScale: GeoArrowTripsLayerProps["widthScale"] | null;
+  protected widthMinPixels: GeoArrowTripsLayerProps["widthMinPixels"] | null;
+  protected widthMaxPixels: GeoArrowTripsLayerProps["widthMaxPixels"] | null;
+  protected jointRounded: GeoArrowTripsLayerProps["jointRounded"] | null;
+  protected capRounded: GeoArrowTripsLayerProps["capRounded"] | null;
+  protected miterLimit: GeoArrowTripsLayerProps["miterLimit"] | null;
+  protected billboard: GeoArrowTripsLayerProps["billboard"] | null;
+  protected fadeTrail: GeoArrowTripsLayerProps["fadeTrail"] | null;
+  protected trailLength: GeoArrowTripsLayerProps["trailLength"] | null;
+  protected currentTime: GeoArrowTripsLayerProps["currentTime"] | null;
+
+  protected getColor: GeoArrowTripsLayerProps["getColor"] | null;
+  protected getWidth: GeoArrowTripsLayerProps["getWidth"] | null;
+  protected getTimestamps!: GeoArrowTripsLayerProps["getTimestamps"];
+
+  constructor(model: WidgetModel, updateStateCallback: () => void) {
+    super(model, updateStateCallback);
+
+    this.initRegularAttribute("width_units", "widthUnits");
+    this.initRegularAttribute("width_scale", "widthScale");
+    this.initRegularAttribute("width_min_pixels", "widthMinPixels");
+    this.initRegularAttribute("width_max_pixels", "widthMaxPixels");
+    this.initRegularAttribute("joint_rounded", "jointRounded");
+    this.initRegularAttribute("cap_rounded", "capRounded");
+    this.initRegularAttribute("miter_limit", "miterLimit");
+    this.initRegularAttribute("billboard", "billboard");
+    this.initRegularAttribute("fade_trail", "fadeTrail");
+    this.initRegularAttribute("trail_length", "trailLength");
+    this.initRegularAttribute("_current_time", "currentTime");
+
+    this.initVectorizedAccessor("get_color", "getColor");
+    this.initVectorizedAccessor("get_width", "getWidth");
+    this.initVectorizedAccessor("get_timestamps", "getTimestamps");
+  }
+
+  layerProps(): Omit<GeoArrowTripsLayerProps, "id"> {
+    return {
+      data: this.table,
+      // Required argument
+      getTimestamps: this.getTimestamps,
+      ...(isDefined(this.widthUnits) && { widthUnits: this.widthUnits }),
+      ...(isDefined(this.widthScale) && { widthScale: this.widthScale }),
+      ...(isDefined(this.widthMinPixels) && {
+        widthMinPixels: this.widthMinPixels,
+      }),
+      ...(isDefined(this.widthMaxPixels) && {
+        widthMaxPixels: this.widthMaxPixels,
+      }),
+      ...(isDefined(this.jointRounded) && { jointRounded: this.jointRounded }),
+      ...(isDefined(this.capRounded) && { capRounded: this.capRounded }),
+      ...(isDefined(this.miterLimit) && { miterLimit: this.miterLimit }),
+      ...(isDefined(this.billboard) && { billboard: this.billboard }),
+      ...(isDefined(this.fadeTrail) && { fadeTrail: this.fadeTrail }),
+      ...(isDefined(this.trailLength) && { trailLength: this.trailLength }),
+      ...(isDefined(this.currentTime) && { currentTime: this.currentTime }),
+      ...(isDefined(this.getColor) && { getColor: this.getColor }),
+      ...(isDefined(this.getWidth) && { getWidth: this.getWidth }),
+    };
+  }
+
+  render(): GeoArrowTripsLayer {
+    return new GeoArrowTripsLayer({
+      ...this.baseLayerProps(),
+      ...this.layerProps(),
+    });
+  }
+}
+
 export async function initializeLayer(
   model: WidgetModel,
   updateStateCallback: () => void,
@@ -954,6 +1027,10 @@ export async function initializeLayer(
 
     case TextModel.layerType:
       layerModel = new TextModel(model, updateStateCallback);
+      break;
+
+    case TripsModel.layerType:
+      layerModel = new TripsModel(model, updateStateCallback);
       break;
 
     default:

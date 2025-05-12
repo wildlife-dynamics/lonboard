@@ -5,6 +5,7 @@ import "./index.css";
 
 const rowIndexSymbol = Symbol.for("rowIndex");
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toHtmlTable(featureProperties: Record<string, any>): string {
   return `<table>
       <tbody>

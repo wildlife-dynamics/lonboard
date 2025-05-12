@@ -59,6 +59,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+PINNED_EMBED_URL = 'https://cdn.jsdelivr.net/npm/@jupyter-widgets/html-manager@1.0.13/dist/embed-amd.js'
 
 class Map(BaseAnyWidget):
     """The top-level class used to display a map in a Jupyter Widget.
@@ -588,6 +589,7 @@ class Map(BaseAnyWidget):
                 # Necessary to pass the state of _this_ specific map. Otherwise, the
                 # state of all known widgets will be included, ballooning the file size.
                 state=dependency_state((self), drop_defaults=False),
+                embed_url=PINNED_EMBED_URL,
             )
 
         if filename is None:

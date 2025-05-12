@@ -17,9 +17,9 @@ class MapKwargs(TypedDict, total=False):
     """Kwargs to pass into map constructor."""
 
     _height: int
-    basemap_style: Union[str, CartoBasemap]
-    parameters: Dict[str, Any]
-    deck_widgets: List[BaseDeckWidget]
+    basemap_style: str | CartoBasemap
+    parameters: dict[str, Any]
+    deck_widgets: list[BaseDeckWidget]
     picking_radius: int
     show_tooltip: bool
     use_device_pixels: int | float | bool

@@ -218,6 +218,7 @@ def viz(
 
     return Map(layers=layers, **map_kwargs)
 
+
 def viz_layer(
     data: Union[VizDataInput, List[VizDataInput], Tuple[VizDataInput, ...]],
     *,
@@ -227,8 +228,7 @@ def viz_layer(
     map_kwargs: Optional[MapKwargs] = None,
     con: Optional[duckdb.DuckDBPyConnection] = None,
 ) -> List[Union[ScatterplotLayer, PathLayer, PolygonLayer]]:
-    """Same as viz but returns only the created layers
-    """
+    """Same as viz but returns only the created layers"""
     color_ordering = COLORS.copy()
 
     if isinstance(data, (list, tuple)):
@@ -259,6 +259,7 @@ def viz_layer(
         map_kwargs["basemap_style"] = CartoBasemap.DarkMatter
 
     return layers
+
 
 DUCKDB_PY_CONN_ERROR = dedent("""\
     Must pass in DuckDBPyRelation object, not DuckDBPyConnection.

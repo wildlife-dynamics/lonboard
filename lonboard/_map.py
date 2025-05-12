@@ -11,9 +11,9 @@ from ipywidgets import CallbackDispatcher
 from ipywidgets.embed import dependency_state, embed_minimal_html
 
 from lonboard._base import BaseAnyWidget
+from lonboard._deck_widget import BaseDeckWidget
 from lonboard._environment import DEFAULT_HEIGHT
 from lonboard._layer import BaseLayer
-from lonboard._deck_widget import BaseDeckWidget
 from lonboard._viewport import compute_view
 from lonboard.basemap import CartoBasemap
 from lonboard.traits import (
@@ -59,7 +59,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
-PINNED_EMBED_URL = 'https://cdn.jsdelivr.net/npm/@jupyter-widgets/html-manager@1.0.13/dist/embed-amd.js'
+PINNED_EMBED_URL = "https://cdn.jsdelivr.net/npm/@jupyter-widgets/html-manager@1.0.13/dist/embed-amd.js"
+
 
 class Map(BaseAnyWidget):
     """The top-level class used to display a map in a Jupyter Widget.
@@ -180,16 +181,18 @@ class Map(BaseAnyWidget):
     """
 
     height = traitlets.Union(
-        [traitlets.Int(),traitlets.Unicode()],
-        default_value=DEFAULT_HEIGHT, allow_none=True
+        [traitlets.Int(), traitlets.Unicode()],
+        default_value=DEFAULT_HEIGHT,
+        allow_none=True,
     ).tag(sync=True)
     """Height of the map in pixels.
 
     This API is not yet stabilized and may change in the future.
     """
     width = traitlets.Union(
-        [traitlets.Int(),traitlets.Unicode()],
-        default_value=DEFAULT_HEIGHT, allow_none=True
+        [traitlets.Int(), traitlets.Unicode()],
+        default_value=DEFAULT_HEIGHT,
+        allow_none=True,
     ).tag(sync=True)
     """Width of the map in pixels.
 
@@ -223,7 +226,7 @@ class Map(BaseAnyWidget):
     """
 
     deck_widgets = VariableLengthTuple(t.Instance(BaseDeckWidget)).tag(
-        sync=True, **ipywidgets.widget_serialization
+        sync=True, **ipywidgets.widget_serialization,
     )
     """One or more `Widget` objects to display on this map.
     """

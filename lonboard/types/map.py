@@ -9,8 +9,9 @@ else:
     from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
-    from lonboard.basemap import CartoBasemap
     from lonboard._deck_widget import BaseDeckWidget
+    from lonboard.basemap import CartoBasemap
+
 
 class MapKwargs(TypedDict, total=False):
     """Kwargs to pass into map constructor."""

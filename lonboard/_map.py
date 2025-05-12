@@ -226,7 +226,8 @@ class Map(BaseAnyWidget):
     """
 
     deck_widgets = VariableLengthTuple(t.Instance(BaseDeckWidget)).tag(
-        sync=True, **ipywidgets.widget_serialization,
+        sync=True,
+        **ipywidgets.widget_serialization,
     )
     """One or more `Widget` objects to display on this map.
     """

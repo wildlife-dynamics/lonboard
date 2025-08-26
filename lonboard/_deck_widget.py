@@ -113,3 +113,10 @@ class SaveImageWidget(CustomDeckWidget):
 
     def __init__(self, **kwargs: dict) -> None:
         super().__init__(**kwargs)
+
+
+class LoadingStateWidget(BaseDeckWidget):
+    _widget_type = traitlets.Unicode("loading-state").tag(sync=True)
+
+    def __init__(self, **kwargs: dict) -> None:
+        super().__init__(**kwargs)

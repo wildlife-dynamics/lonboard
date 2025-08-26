@@ -13,6 +13,7 @@ import {
   TitleWidget,
   ScaleWidget,
   SaveImageWidget,
+  LoadingStateWidget,
 } from "./deck-widget.js";
 
 export abstract class BaseDeckWidgetModel extends BaseModel {
@@ -293,6 +294,19 @@ export class SaveImageWidgetModel extends CustomDeckWidgetModel {
   }
 }
 
+export class LoadingStateWidgetModel extends CustomDeckWidgetModel {
+  static widgetType = "loading-state";
+  constructor(model: WidgetModel, updateStateCallback: () => void) {
+    super(model, updateStateCallback);
+  }
+
+  render() {
+    return new LoadingStateWidget({
+      id: "loading-state",
+    });
+  }
+}
+
 export async function initializeWidget(
   model: WidgetModel,
   updateStateCallback: () => void,
@@ -330,6 +344,10 @@ export async function initializeWidget(
 
     case SaveImageWidgetModel.widgetType:
       deckWidgetModel = new SaveImageWidgetModel(model, updateStateCallback);
+      break;
+
+    case LoadingStateWidgetModel.widgetType:
+      deckWidgetModel = new LoadingStateWidgetModel(model, updateStateCallback);
       break;
 
     default:

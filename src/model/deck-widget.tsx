@@ -1,5 +1,6 @@
 import {
   Deck,
+  Layer,
   Viewport,
   WebMercatorViewport,
   Widget,
@@ -9,6 +10,7 @@ import { CompassWidget } from "@deck.gl/widgets";
 import React from "react";
 import { Root, createRoot } from "react-dom/client";
 import { toPng } from "html-to-image";
+import LinearProgress from '@mui/material/LinearProgress'
 
 interface TitleWidgetProps {
   id: string;
@@ -466,5 +468,96 @@ export class SaveImageWidget implements Widget<SaveImageWidgetProps> {
 
   setProps(props: Partial<SaveImageWidgetProps>) {
     Object.assign(this.props, props);
+  }
+}
+
+interface LoadingStateWidgetProps {
+  id: string;
+  viewId?: string | null;
+  placement?: WidgetPlacement;
+}
+
+export class LoadingStateWidget implements Widget<LoadingStateWidgetProps> {
+  root?: Root;
+  id = "loading-sate";
+  props: LoadingStateWidgetProps;
+  viewId?: string | null = null;
+  viewport?: Viewport;
+  placement: WidgetPlacement = "fill";
+  deck?: Deck;
+  element?: HTMLDivElement;
+  loading: boolean = true;
+
+  constructor(props: LoadingStateWidgetProps) {
+    this.id = props.id || "scale";
+    this.placement = props.placement || "fill";
+    this.viewId = props.viewId || null;
+    this.props = props;
+  }
+
+  setProps(props: Partial<ScaleWidgetProps>) {
+    Object.assign(this.props, props);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onAdd({ deck }: { deck: Deck<any> }): HTMLDivElement {
+    const element = document.createElement("div");
+    element.classList.add("deck-widget");
+    this.deck = deck;
+    this.element = element;
+    this.root = createRoot(element);
+
+    this.update();
+    return element;
+  }
+
+  update() {
+      const element = this.element;
+      if (!element) {
+        return;
+      }
+
+      const ui =
+      (
+        <div>
+          {(this.loading) && (
+            <div className="loading-state-widget-outer">
+            <div className="loading-state-widget-inner">
+              <p>Loading content...</p>
+              <div className="loading-state-widget-progress-bar">
+                <LinearProgress color="inherit" />
+              </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+      const empty = <div></div>
+
+      if (this.root) {
+        if (this.loading)
+          this.root.render(ui);
+        else
+          this.root.render(empty);
+      }
+    }
+
+  onRemove() {
+    this.deck = undefined;
+    this.element = undefined;
+  }
+
+  onRedraw({layers}: {layers: Layer[]}): void {
+    if (this.loading && layers.length > 0) {
+      const loading = layers.some(
+        layer => {
+          return !layer.isLoaded
+        }
+      );
+      if (loading != this.loading) {
+        this.loading = false;
+        this.update();
+      }
+    }
   }
 }

@@ -46,6 +46,11 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <title>{title}</title>
+    <script>
+        window.onload = function() {{
+            window.parent.postMessage({{ status: 'mapLoaded' }}, '*');
+        }};
+    </script>
 </head>
 <style>
     html {{ height: 100%; }}

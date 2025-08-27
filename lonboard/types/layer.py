@@ -97,6 +97,7 @@ class BitmapLayerKwargs(BaseLayerKwargs, total=False):
 
 
 class BitmapTileLayerKwargs(BaseLayerKwargs, total=False):
+    widget_id: int | None
     data: str | Sequence[str]
     tile_size: int
     zoom_offset: int

@@ -253,7 +253,10 @@ export class BitmapTileModel extends BaseLayerModel {
       ...this.layerProps(),
 
       onTileLoad: () => {
-        window.parent.postMessage({ type: 'TileLoaded', widgetId: this.widgetId }, '*')
+        window.parent.postMessage(
+          { type: "TileLoaded", widgetId: this.widgetId },
+          "*",
+        );
       },
 
       renderSubLayers: (props) => {

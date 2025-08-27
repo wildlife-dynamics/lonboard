@@ -170,8 +170,18 @@ export class NorthArrowWidget extends CompassWidget {
     return element;
   }
 
+  onViewportChange(viewport: Viewport) {
+    // no need to update if viewport is the same
+    if (!viewport.equals(this.viewports[viewport.id])) {
+      this.viewports[viewport.id] = viewport;
+      this.update();
+    }
+  }
+
   update() {
-    const [rz, rx] = this.getRotation();
+    const viewId = this.viewId || Object.values(this.viewports)[0]?.id || 'default-view';
+    const viewport = this.viewports[viewId];
+    const [rz, rx] = this.getRotation(viewport);
     const element = this.element;
     if (!element) {
       return;

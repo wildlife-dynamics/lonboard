@@ -249,6 +249,10 @@ export class BitmapTileModel extends BaseLayerModel {
       ...this.baseLayerProps(),
       ...this.layerProps(),
 
+      onTileLoad: () => {
+        window.postMessage('TileLoaded')
+      },
+
       renderSubLayers: (props) => {
         const [min, max] = props.tile.boundingBox;
 

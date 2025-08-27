@@ -179,7 +179,8 @@ export class NorthArrowWidget extends CompassWidget {
   }
 
   update() {
-    const viewId = this.viewId || Object.values(this.viewports)[0]?.id || 'default-view';
+    const viewId =
+      this.viewId || Object.values(this.viewports)[0]?.id || "default-view";
     const viewport = this.viewports[viewId];
     const [rz, rx] = this.getRotation(viewport);
     const element = this.element;

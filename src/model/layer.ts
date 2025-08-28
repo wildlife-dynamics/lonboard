@@ -140,7 +140,6 @@ export class ArcModel extends BaseArrowLayerModel {
 export class BitmapModel extends BaseLayerModel {
   static layerType = "bitmap";
 
-  protected widgetId: TileLayerProps["widgetId"];
   protected image: BitmapLayerProps["image"];
   protected bounds: BitmapLayerProps["bounds"];
   protected desaturate: BitmapLayerProps["desaturate"];
@@ -182,7 +181,7 @@ export class BitmapModel extends BaseLayerModel {
 export class BitmapTileModel extends BaseLayerModel {
   static layerType = "bitmap-tile";
 
-  protected widgetId: TileLayerProps["widgetId"];
+  protected widgetId: number | null = null;
   protected data!: TileLayerProps["data"];
   protected tileSize: TileLayerProps["tileSize"];
   protected zoomOffset: TileLayerProps["zoomOffset"];
@@ -253,10 +252,12 @@ export class BitmapTileModel extends BaseLayerModel {
       ...this.layerProps(),
 
       onTileLoad: () => {
-        window.parent.postMessage(
-          { type: "TileLoaded", widgetId: this.widgetId },
-          "*",
-        );
+        if (this.widgetId) {
+          window.parent.postMessage(
+            { type: "TileLoaded", widgetId: this.widgetId },
+            "*",
+          );
+        }
       },
 
       renderSubLayers: (props) => {

@@ -181,6 +181,7 @@ export class BitmapModel extends BaseLayerModel {
 export class BitmapTileModel extends BaseLayerModel {
   static layerType = "bitmap-tile";
 
+  protected widgetId: number | null = null;
   protected data!: TileLayerProps["data"];
   protected tileSize: TileLayerProps["tileSize"];
   protected zoomOffset: TileLayerProps["zoomOffset"];
@@ -201,6 +202,7 @@ export class BitmapTileModel extends BaseLayerModel {
 
     this.initRegularAttribute("data", "data");
 
+    this.initRegularAttribute("widget_id", "widgetId");
     this.initRegularAttribute("tile_size", "tileSize");
     this.initRegularAttribute("zoom_offset", "zoomOffset");
     this.initRegularAttribute("max_zoom", "maxZoom");
@@ -248,6 +250,15 @@ export class BitmapTileModel extends BaseLayerModel {
     return new TileLayer({
       ...this.baseLayerProps(),
       ...this.layerProps(),
+
+      onTileLoad: () => {
+        if (this.widgetId) {
+          window.parent.postMessage(
+            { type: "TileLoaded", widgetId: this.widgetId },
+            "*",
+          );
+        }
+      },
 
       renderSubLayers: (props) => {
         const [min, max] = props.tile.boundingBox;

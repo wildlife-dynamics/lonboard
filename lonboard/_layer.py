@@ -591,12 +591,12 @@ class BitmapTileLayer(BaseLayer):
     balanced among the endpoints, based on the tile index.
     """
 
-    widget_id = t.Int(None, allow_none=True).tag(sync=True)
+    widget_id = t.Unicode(None, allow_none=True).tag(sync=True)
     """
     The id of the dashboard widget that this tile layer belongs to. If set, MUST match the
     widget.id field sent down in the dashboard JSON.
 
-    - Type: `int`, optional
+    - Type: `str`, optional
     - Default: `None`
     """
 

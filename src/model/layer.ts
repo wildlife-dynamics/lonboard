@@ -181,7 +181,7 @@ export class BitmapModel extends BaseLayerModel {
 export class BitmapTileModel extends BaseLayerModel {
   static layerType = "bitmap-tile";
 
-  protected widgetId: number | null = null;
+  protected widgetId: string | null = null;
   protected data!: TileLayerProps["data"];
   protected tileSize: TileLayerProps["tileSize"];
   protected zoomOffset: TileLayerProps["zoomOffset"];

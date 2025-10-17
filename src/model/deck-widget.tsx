@@ -453,7 +453,12 @@ export class SaveImageWidget implements Widget<SaveImageWidgetProps> {
       const deck_wrapper = this.deck?.getCanvas()?.parentElement;
 
       if (deck_wrapper) {
-        toPng(deck_wrapper)
+        const filter = (node: HTMLElement) => {
+          const exclusionClasses = ["deck-widget-save-image"];
+          return !exclusionClasses.some((classname) => node.classList?.contains(classname));
+        }
+
+        toPng(deck_wrapper, {filter: filter})
           .then(function (dataUrl) {
             const img = new Image();
             img.src = dataUrl;
